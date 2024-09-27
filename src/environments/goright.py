@@ -23,7 +23,7 @@ class GoRightEnv(gym.Env):
     def __init__(
         self,
         num_prize_indicators: int = 2,
-        length: int = 10,
+        length: int = 11,
         status_intensities: List[int] = [0, 5, 10],
         is_observation_noisy: bool = False,
         seed: Optional[int] = None
@@ -36,44 +36,44 @@ class GoRightEnv(gym.Env):
         self.previous_status: Optional[int] = None
         self.is_observation_noisy = is_observation_noisy
 
-        if seed is not None:
-            np.random.seed(seed)
-
         self.action_space = spaces.Discrete(2)  # 0: left, 1: right
         self.observation_space = spaces.Dict(
             {
                 "position": spaces.Discrete(length),
-                "intensity": spaces.Box(low=np.array([0]), high=np.array([10]), shape=(1,), dtype=np.int8),
-                "prize_status": spaces.Box(low=np.array([0]*num_prize_indicators), high=np.array([1]*num_prize_indicators), shape=(num_prize_indicators,), dtype=np.int8),
+                "intensity": spaces.Box(low=np.zeros(1), high=np.zeros(1)+10, shape=(1,), dtype=np.int8),
+                "prize_status": spaces.Box(low=np.zeros(num_prize_indicators), high=np.ones(num_prize_indicators), shape=(num_prize_indicators,), dtype=np.int8),
             }
         )
-
-        self.state: np.ndarray = np.array([0] + [0] + [0] * self.num_prize_indicators, dtype=int)
-        self.is_right_low_intensity: bool = False
-
-        self.position_offset: float = 0.0
-        self.status_indicator_offset: float = 0.0
-        self.prize_indicator_offset: float = 0.0
-
+        
+        self.seed(seed)
         self.reset(seed=seed)
 
-    def reset(self, seed: Optional[int]) -> Tuple[np.ndarray, Dict]:
+    def seed(self, seed=None):
+        self.np_random, seed = gym.utils.seeding.np_random(int(seed))
+        return [seed]
+
+    def reset(self, seed: Optional[int]=None, new_state: Optional[np.ndarray]=None, previous_status: Optional[int]=None) -> Tuple[np.ndarray, Dict]:
         """Resets the environment to its initial state."""
         if seed is not None:
-            np.random.seed(seed)
+            self.seed(seed)
 
-        self.state = np.array([0] + [0] + [0] * self.num_prize_indicators, dtype=int)
-        self.is_right_low_intensity = False
-        self.previous_status = 0
+        if new_state is not None:
+            assert new_state.shape == (2 + self.num_prize_indicators)
+            self.state = new_state
+            self.previous_status = previous_status
+        else:
+            self.state: np.ndarray = np.zeros(2+self.num_prize_indicators, dtype=int)
+            self.previous_status: int = 0
 
         if self.is_observation_noisy:
-            self.position_offset = np.random.uniform(-0.25, 0.25)
-            self.status_indicator_offset = np.random.uniform(-1.25, 1.25)
-            self.prize_indicator_offset = np.random.uniform(-0.25, 0.25)
+            self.position_offset = self.np_random.uniform(-0.25, 0.25)
+            self.status_indicator_offset = self.np_random.uniform(-1.25, 1.25)
+            self.prize_indicator_offsets = self.np_random.uniform(-0.25, 0.25, size=self.num_prize_indicators)
         else:
             self.position_offset = 0.0
             self.status_indicator_offset = 0.0
-            self.prize_indicator_offset = 0.0
+            self.prize_indicator_offsets = np.zeros(self.num_prize_indicators)
+
 
         return self._add_noise_to_state(self.state.copy()), {}
 
@@ -83,7 +83,7 @@ class GoRightEnv(gym.Env):
 
         # Determine the next position and status
         direction = 1 if action > 0 else -1
-        next_pos = max(0, min(self.length - 1, position + direction))  # Constrain within bounds
+        next_pos = np.clip(position + direction, a_min=0, a_max=self.length - 1)  # Constrain within bounds
 
         next_status = STATUS_TABLE.get((self.previous_status, current_status), 0)
         next_prize_indicators = self._compute_next_prize_indicators(next_pos, position, next_status, prize_indicators)
@@ -100,35 +100,30 @@ class GoRightEnv(gym.Env):
         return self._add_noise_to_state(self.state.copy()), reward, False, False, {}
 
     def _compute_next_prize_indicators(self, next_position, position, next_status, prize_indicators):
-        if next_position != self.length - 1:
-            self.is_right_low_intensity = False
-            return np.zeros(self.num_prize_indicators, dtype=int)
-        elif all(prize_indicators) == 1:
-            self.is_right_low_intensity = False
-            return np.ones(self.num_prize_indicators, dtype=int)
-        elif position == self.length - 2:
-            if next_status == self.max_intensity:
-                self.is_right_low_intensity = False
-                return np.ones(self.num_prize_indicators, dtype=int)
-
-        if self.is_right_low_intensity:
-            return self._shift_prize_indicators(prize_indicators)
-        else:
-            self.is_right_low_intensity = True
-            return np.zeros(self.num_prize_indicators, dtype=int)
+        if next_position == self.length - 1: # if I am going to position 10
+            if position == self.length - 2: # if I am at position 9
+                if next_status == self.max_intensity: # if intensity = 10
+                    return np.ones(self.num_prize_indicators, dtype=int) # 11  
+            else: # I am at position 10
+                if all(prize_indicators) == 1: # receiving prize
+                    return prize_indicators
+                else: # not receiving prize
+                    return self._shift_prize_indicators(prize_indicators)
+        
+        return np.zeros(self.num_prize_indicators, dtype=int)
 
     def _shift_prize_indicators(self, prize_indicators):
-        prize_indicators = list(prize_indicators)
-        if 1 not in prize_indicators:
+        if np.sum(prize_indicators) == 0: # all zeros
             prize_indicators[0] = 1
-        else:
-            index = prize_indicators.index(1)
-            if index == self.num_prize_indicators - 1:
-                prize_indicators = [0] * self.num_prize_indicators
+        else: # has a 1 in it, shift it
+            one_index = np.argmax(prize_indicators)
+            if one_index == self.num_prize_indicators - 1: # if one in the last place, return all zeros
+                prize_indicators[one_index] = 0
             else:
-                prize_indicators[index] = 0
-                prize_indicators[index + 1] = 1
-        return np.array(prize_indicators, dtype=int)
+                prize_indicators[one_index] = 0
+                prize_indicators[one_index + 1] = 1
+
+        return prize_indicators
 
     def _compute_reward(self, next_prize_indicators, action):
         if all(next_prize_indicators) == 1:
@@ -141,5 +136,5 @@ class GoRightEnv(gym.Env):
         if self.is_observation_noisy:
             state[0] = state[0] + self.position_offset
             state[1] = state[1] + self.status_indicator_offset
-            state[2:] = state[2:] + self.prize_indicator_offset
+            state[2:] = state[2:] + self.prize_indicator_offsets
         return state
