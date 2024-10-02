@@ -1,6 +1,6 @@
 import wandb
 from src.environments.goright import GoRightEnv
-from src.agents.q_learning import QLearning
+from src.agents.agents import QLearningAgent
 import numpy as np
 from multiprocessing import Process, Manager
 import random
@@ -12,7 +12,7 @@ def train_agent(seed, config, return_dict):
     try:
         import numpy as np
         from src.environments.goright import GoRightEnv
-        from src.agents.q_learning import QLearning
+        from src.agents.agents import QLearningAgent
         import random
         import traceback
         import wandb
@@ -20,8 +20,8 @@ def train_agent(seed, config, return_dict):
         import copy
 
         # Set the random seed for reproducibility
-        np.random.seed(seed)
-        random.seed(seed)
+        # np.random.seed(seed)
+        # random.seed(seed)
 
         # Extract configurations
         training_loops = config["training"]["training_loops"]
@@ -29,11 +29,10 @@ def train_agent(seed, config, return_dict):
         learning_rate = config["agent"]["learning_rate"]
         discount_factor = config["agent"]["discount_factor"]
         num_prize_indicators = config["environment"]["num_prize_indicators"]
-        rollout_length = config["agent"]["rollout_length"]
+        max_horizon = config["agent"]["max_horizon"]
         status_intensities = config["environment"]["status_intensities"]
         env_length = config["environment"]["env_length"]
-        is_observation_noisy = config["environment"]["is_observation_noisy"]
-        use_value_expansion = config["training"]["use_value_expansion"]
+        has_state_offset = config["environment"]["has_state_offset"]
 
         # Initialize wandb for this process
         wandb.init(
@@ -52,18 +51,18 @@ def train_agent(seed, config, return_dict):
 
         # Initialize the environment and agent
         base_env = GoRightEnv(
-            is_observation_noisy=is_observation_noisy,
-            seed=seed,
+            has_state_offset=has_state_offset,
+            # seed=seed,
             num_prize_indicators=num_prize_indicators,
             length=env_length,
             status_intensities=status_intensities
         )
 
-        agent = QLearning(
-            learning_rate=learning_rate,
-            discount_factor=discount_factor,
-            env_action_space=base_env.action_space,
-            rollout_length=rollout_length,
+        agent = QLearningAgent(
+            dynamics_model=copy.deepcopy(base_env),
+            gamma=discount_factor,
+            action_space=base_env.action_space,
+            max_horizon=max_horizon,
             environment_length=env_length,
             intensities_length=len(status_intensities),
             num_prize_indicators=num_prize_indicators,
@@ -78,16 +77,16 @@ def train_agent(seed, config, return_dict):
             # Perform one training episode
             train_total_reward = 0
             agent.td_error = []  # Reset TD errors for this episode
-            for _ in range(n_steps):
+            for step in range(n_steps):
                 action = agent.get_action(obs, greedy=False)
                 next_obs, reward, terminated, truncated, info = base_env.step(action)
-                agent.update_q_values(
+                td_error = agent.update_q_values(
                     obs,
                     action,
                     reward,
                     next_obs,
-                    # use_value_expansion=use_value_expansion,
-                    # dynamics_model=copy.deepcopy(base_env),
+                    alpha=learning_rate,
+                    tau=0,
                 )
                 obs = next_obs
                 train_total_reward += reward
@@ -97,13 +96,11 @@ def train_agent(seed, config, return_dict):
 
             discounted_return = 0
             eval_total_reward = 0
-            gamma = 1.0
             for step in range(n_steps):
                 action = agent.get_action(obs, greedy=True)
                 next_obs, reward, terminated, truncated, info = base_env.step(action)
                 obs = next_obs
-                discounted_return += gamma * reward
-                gamma *= discount_factor
+                discounted_return += (discount_factor ** step) * reward
                 eval_total_reward += reward
 
                 wandb.log(

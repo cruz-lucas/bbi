@@ -25,7 +25,7 @@ class GoRightEnv(gym.Env):
         num_prize_indicators: int = 2,
         length: int = 11,
         status_intensities: List[int] = [0, 5, 10],
-        is_observation_noisy: bool = False,
+        has_state_offset: bool = False,
         seed: Optional[int] = None
     ) -> None:
         """Initializes the GoRight environment."""
@@ -33,47 +33,41 @@ class GoRightEnv(gym.Env):
         self.num_prize_indicators = num_prize_indicators
         self.length = length
         self.max_intensity = max(status_intensities)
+        self.intensities = status_intensities
         self.previous_status: Optional[int] = None
-        self.is_observation_noisy = is_observation_noisy
+        self.has_state_offset = has_state_offset
 
         self.action_space = spaces.Discrete(2)  # 0: left, 1: right
         self.observation_space = spaces.Dict(
             {
                 "position": spaces.Discrete(length),
-                "intensity": spaces.Box(low=np.zeros(1), high=np.zeros(1)+10, shape=(1,), dtype=np.int8),
+                "intensity": spaces.Discrete(len(status_intensities)),
                 "prize_status": spaces.Box(low=np.zeros(num_prize_indicators), high=np.ones(num_prize_indicators), shape=(num_prize_indicators,), dtype=np.int8),
             }
         )
         
-        self.seed(seed)
         self.reset(seed=seed)
 
     def seed(self, seed=None):
-        self.np_random, seed = gym.utils.seeding.np_random(int(seed))
+        self.np_random, seed = gym.utils.seeding.np_random(int(np.random.random(1)[0]*100 if seed is None else seed))
         return [seed]
 
     def reset(self, seed: Optional[int]=None, new_state: Optional[np.ndarray]=None, previous_status: Optional[int]=None) -> Tuple[np.ndarray, Dict]:
         """Resets the environment to its initial state."""
-        if seed is not None:
-            self.seed(seed)
+        self.seed(seed)
 
         if new_state is not None:
-            assert new_state.shape == (2 + self.num_prize_indicators)
-            self.state = new_state
-            self.previous_status = previous_status
+            self.state: np.ndarray = new_state
+            self.previous_status: int = previous_status
         else:
-            self.state: np.ndarray = np.zeros(2+self.num_prize_indicators, dtype=int)
-            self.previous_status: int = 0
+            self.state: np.ndarray = np.zeros(2+self.num_prize_indicators, dtype=float)
+            self.state[1] = self.np_random.choice(self.intensities)
+            self.previous_status: int = self.np_random.choice(self.intensities)
 
-        if self.is_observation_noisy:
+        if self.has_state_offset:
             self.position_offset = self.np_random.uniform(-0.25, 0.25)
             self.status_indicator_offset = self.np_random.uniform(-1.25, 1.25)
             self.prize_indicator_offsets = self.np_random.uniform(-0.25, 0.25, size=self.num_prize_indicators)
-        else:
-            self.position_offset = 0.0
-            self.status_indicator_offset = 0.0
-            self.prize_indicator_offsets = np.zeros(self.num_prize_indicators)
-
 
         return self._add_noise_to_state(self.state.copy()), {}
 
@@ -133,7 +127,7 @@ class GoRightEnv(gym.Env):
         return -1  # right
 
     def _add_noise_to_state(self, state):
-        if self.is_observation_noisy:
+        if self.has_state_offset:
             state[0] = state[0] + self.position_offset
             state[1] = state[1] + self.status_indicator_offset
             state[2:] = state[2:] + self.prize_indicator_offsets
