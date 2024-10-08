@@ -6,8 +6,8 @@ training:
 
 agent:
   learning_rate: 0.05         # Learning rate for Q-learning updates
-  gamma: 0.9        # Discount factor (gamma)
-  max_horizon: 5              # Length of rollout for MBVE
+  gamma: 0.9                  # Discount factor (gamma)
+  max_horizon: 1              # Length of rollout for MBVE
 
 environment:
   has_state_offset: true          # Whether observations are noisy
