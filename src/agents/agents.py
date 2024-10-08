@@ -1,14 +1,19 @@
 """This module implements a Q-Learning agent using a tabular approach."""
 
-import random
 from abc import ABC
 from typing import Tuple
+from typing import Optional
 
 import gymnasium
 import numpy as np
 
 import logging
-logging.basicConfig(level=logging.DEBUG, filename='logs/qlearning.log')
+from datetime import datetime
+
+logging.basicConfig(
+    level=logging.DEBUG,
+    filename=f'logs/agents_{datetime.now().strftime("%d%m%Y_%H%M%S")}.log',
+)
 
 
 class QLearningAgent(ABC):
@@ -26,14 +31,13 @@ class QLearningAgent(ABC):
 
     def __init__(
         self,
-        action_space: gymnasium.Space,
-        dynamics_model: gymnasium.Env,
+        action_space: gymnasium.Space,        
         gamma: float = 0.9,
         max_horizon: int = 5,
         environment_length: int = 11,
         intensities_length: int = 3,
         num_prize_indicators: int = 2,
-        initial_value: int = 0
+        initial_value: int = 0,
     ) -> None:
         """
         Initializes the QLearningAgent with the given parameters.
@@ -48,23 +52,27 @@ class QLearningAgent(ABC):
             num_prize_indicators (int, optional): The number of prize indicators in the state. Defaults to 2.
         """
         self.action_space = action_space
-        self.dynamics_model = dynamics_model
         self.gamma = gamma
         self.max_horizon = max_horizon
         self.environment_length = environment_length
         self.num_prize_indicators = num_prize_indicators
-        self.q_values = np.zeros(
-            (
-                environment_length,
-                intensities_length,
-                2**num_prize_indicators,
-                action_space.n,
-            ),
-            dtype=float,
-        ) + initial_value
+        self.q_values = (
+            np.zeros(
+                (
+                    environment_length,
+                    intensities_length,
+                    2**num_prize_indicators,
+                    action_space.n,
+                ),
+                dtype=float,
+            )
+            + initial_value
+        )
 
         self.td_error = []
         self.td_error_matrix = []
+
+        self.debug = True
 
     def round_obs(self, obs: np.ndarray) -> Tuple[int, int, int]:
         """Rounds and discretizes the observation into discrete state components.
@@ -109,6 +117,16 @@ class QLearningAgent(ABC):
 
         q_values = self.q_values[pos, intensity, prize]
         ties = np.argwhere(q_values == q_values.max()).flatten()
+
+        if self.debug:
+            log_dict = {
+                "function": "get_action",
+                "state": state,
+                "q_values": self.q_values[pos, intensity, prize],
+                "ties": ties,
+            }
+            logging.debug(log_dict)
+    
         return int(np.random.choice(ties))
 
     def update_q_values(
@@ -119,6 +137,7 @@ class QLearningAgent(ABC):
         next_state: np.ndarray,
         alpha: float,
         tau: float,
+        dynamics_model: Optional[gymnasium.Env] = None,
     ) -> None:
         """Updates the Q-values for a given state-action pair using multi-step temporal difference errors.
 
@@ -136,9 +155,9 @@ class QLearningAgent(ABC):
         for horizon in range(1, self.max_horizon + 1):
             td_target = self.calculate_td_target(
                 reward=reward,
-                current_state=state,
                 next_state=next_state,
                 horizon=horizon,
+                dynamics_model=dynamics_model
             )
             td_targets.append(td_target)
 
@@ -150,23 +169,27 @@ class QLearningAgent(ABC):
         td_error = weighted_td_target - self.q_values[pos, intensity, prize, action]
         self.q_values[pos, intensity, prize, action] += alpha * td_error
         self.td_error.append(td_error)
-        log_dict = {
-            "state": state,
-            "action": action,
-            "next_state": next_state,
-            "targets": td_targets,
-            "weighted_td_target": weighted_td_target,
-            "q_values": self.q_values[pos, intensity, prize]
-        }
-        logging.debug(log_dict)
+
+        if self.debug:
+            log_dict = {
+                "function": "update_q_values",
+                "state": state,
+                "action": action,
+                "next_state": next_state,
+                "targets": td_targets,
+                "weighted_td_target": weighted_td_target,
+                "q_values": self.q_values[pos, intensity, prize],
+            }
+            logging.debug(log_dict)
+
         return td_error
 
     def calculate_td_target(
         self,
         reward: float,
-        current_state: np.ndarray,
         next_state: np.ndarray,
         horizon: int,
+        dynamics_model: Optional[gymnasium.Env] = None,
     ) -> float:
         """Calculates the temporal difference (TD) target for a specific horizon.
 
@@ -179,36 +202,26 @@ class QLearningAgent(ABC):
         Returns:
             float: The calculated TD target.
         """
+        total_discounted_return = reward
+        discount = self.gamma
         simulated_state = next_state.copy()
-        total_discounted_reward = reward
 
-        if horizon > 1: # if long horizon, initializes dynamics model
-            pos, intensity, prize = self.round_obs(current_state)
-            self.dynamics_model.reset(
-                new_state=simulated_state, previous_status=intensity
-            )
+        for h in range(1, horizon):
+            action = self.get_action(simulated_state, greedy=True)
+            next_simulated_state, reward, terminated, truncated, _ = dynamics_model.step(action)
 
-        for i in range(2, horizon + 1): # accumulate returns
-            simulated_action = self.get_action(simulated_state, greedy=True)
-            (
-                simulated_next_state,
-                simulated_reward,
-                terminated,
-                truncated,
-                info,
-            ) = self.dynamics_model.step(simulated_action)
-            total_discounted_reward += (self.gamma ** (i - 1)) * simulated_reward
-
-            simulated_state = simulated_next_state
+            total_discounted_return += discount * reward
+            discount *= self.gamma
 
             if terminated or truncated:
                 break
+            
+            simulated_state = next_simulated_state
 
-        next_pos, next_inten, next_prize = self.round_obs(simulated_state)
-        max_future_q = np.max(self.q_values[next_pos, next_inten, next_prize])
+        pos, intensity, prize = self.round_obs(simulated_state)
+        max_future_q = np.max(self.q_values[pos, intensity, prize])
 
-        target = total_discounted_reward + self.gamma**horizon * max_future_q
-
+        target = total_discounted_return + discount * max_future_q
         return target
 
     def calculate_weights(
@@ -231,4 +244,8 @@ class QLearningAgent(ABC):
         """
         # Placeholder for uncertainty-based weighting
         # To be implemented based on the dynamics model's uncertainty estimates
-        return np.ones(len(td_targets)) / len(td_targets)
+        weights = np.ones(len(td_targets)) / len(td_targets)
+
+        assert np.isclose(a=weights.sum(), b=1.0, atol=1e-5)
+
+        return weights
