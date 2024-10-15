@@ -5,9 +5,9 @@ training:
   start_seed: 0               # Start seed
 
 agent:
-  learning_rate: 0.05         # Learning rate for Q-learning updates
+  learning_rate: 0.1         # Learning rate for Q-learning updates
   gamma: 0.9                  # Discount factor (gamma)
-  max_horizon: 1              # Length of rollout for MBVE
+  max_horizon: 5              # Length of rollout for MBVE
 
 environment:
   has_state_offset: true          # Whether observations are noisy
@@ -17,6 +17,5 @@ environment:
 
 wandb:
   project: "BBI_reproduction" # Project name for Weights & Biases logging
-  run_name: "qlearning"
-  notes: "Testing q-learning with correct training iterations and learning rate"  # Notes for the run
-  group_name: "GoRight_Perfect"
+  notes: "Testing q-learning with perfect model mve"  # Notes for the run
+  group_name: "goright_perfect_fixed_args"

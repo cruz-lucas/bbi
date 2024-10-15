@@ -160,7 +160,7 @@ class GoRightEnv(gym.Env):
         self.state[1] = next_status
         self.state[2:] = next_prize_indicators
 
-        reward = self._compute_reward(next_prize_indicators, action)
+        reward = self._compute_reward(next_prize_indicators, action, position)
         self.previous_status = current_status
 
         return self._add_offset_to_state(self.state.copy()), reward, False, False, {}
@@ -218,17 +218,18 @@ class GoRightEnv(gym.Env):
 
         return prize_indicators
 
-    def _compute_reward(self, next_prize_indicators: np.ndarray, action: int) -> int:
+    def _compute_reward(self, next_prize_indicators: np.ndarray, action: int, position: int) -> int:
         """Computes the reward based on the next prize indicators and action.
 
         Args:
             next_prize_indicators (np.ndarray): The prize indicators after the action.
             action (int): The action taken by the agent.
+            position (int): The current postion of the agent.
 
         Returns:
             int: The reward for the given action.
         """
-        if all(next_prize_indicators) == 1:
+        if (all(next_prize_indicators) == 1) and (position == self.length-1):
             return 3
         if action == 0:  # Left
             return 0

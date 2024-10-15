@@ -35,6 +35,7 @@ def train_agent(seed, config, return_dict):
             reinit=True,
             notes=config["wandb"]["notes"],
             group=config["wandb"]["group_name"],
+            dir=f"./wandb_{config['wandb']['run_name']}_seed_{seed}",
         )
 
         # Initialize the environment and agent
@@ -97,10 +98,11 @@ def train_agent(seed, config, return_dict):
 
                 wandb.log(
                     {
-                        "evaluation/step": step + n_steps * training_step,
                         "evaluation/discounted_return": discounted_return,
+                        "evaluation/discounted_reward": discount * reward,
                         "evaluation/reward": reward,
-                    }
+                    },
+                    step=step + n_steps * training_step
                 )
 
                 if terminated or truncated:
@@ -109,14 +111,14 @@ def train_agent(seed, config, return_dict):
             # Log evaluation metrics
             wandb.log(
                 {
-                    "train/step": training_step,
                     "train/total_train_reward": train_total_reward,
                     "train/average_td_error": (
                         np.mean(agent.td_error) if agent.td_error else 0
                     ),
                     "train/total_evaluation_reward": eval_total_reward,
                     "train/total_evaluation_discounted_return": discounted_return,
-                }
+                },
+                step=training_step,
             )
 
         # Save the Q-values table as an artifact
@@ -175,7 +177,7 @@ def main():
     if args.learning_rate is not None:
         config["agent"]["learning_rate"] = args.learning_rate
     if args.discount_factor is not None:
-        config["agent"]["discount_factor"] = args.discount_factor
+        config["agent"]["gamma"] = args.discount_factor
     if args.n_seeds is not None:
         config["training"]["n_seeds"] = args.n_seeds
     if args.start_seed is not None:

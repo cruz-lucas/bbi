@@ -78,8 +78,6 @@ def main():
     st.subheader("Weights & Biases (Wandb) Parameters")
     wandb_project = st.text_input("Wandb Project Name", 
                                   value=default_config["wandb"]["project"])
-    wandb_run_name = st.text_input("Wandb Run Name", 
-                                   value=default_config["wandb"]["run_name"])
     wandb_notes = st.text_area("Wandb Notes", 
                                value=default_config["wandb"]["notes"])
     wandb_group_name = st.text_input("Wandb Group Name", 
@@ -120,7 +118,7 @@ def main():
             },
             "wandb": {
                 "project": wandb_project,
-                "run_name": wandb_run_name,
+                "run_name": wandb_group_name,
                 "notes": wandb_notes,
                 "group_name": wandb_group_name
             }
