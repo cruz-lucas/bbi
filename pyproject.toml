@@ -1,9 +1,10 @@
 [project]
-name = "sandbox"
+name = "bbi"
 version = "0.1.0"
-description = "Add your description here"
+description = 'Replication of results published in "Bounding-Box Inference for Error-Aware ModelBased Reinforcement Learning"'
 readme = "README.md"
 requires-python = "==3.10.*"
+license = {text = "MIT License"}
 dependencies = [
     "ipykernel>=6.29.5",
     "pandas>=2.2.2",
@@ -17,4 +18,13 @@ dependencies = [
     "cython>=3.0.11",
     "streamlit>=1.39.0",
     "watchdog>=5.0.3",
+    "bbi",
 ]
+
+[project.urls]
+Homepage = "https://example.com"
+Documentation = "https://readthedocs.org"
+Repository = "https://github.com/me/spam.git"
+
+[tool.uv.sources]
+bbi = { workspace = true }

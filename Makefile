@@ -1,8 +1,8 @@
 CUDA := 12.6.0
 TAG := devel
 OS := ubuntu20.04
-IMAGE_NAME := research_sandbox_image
-CONTAINER_NAME := research_sandbox_container
+IMAGE_NAME := bbi
+CONTAINER_NAME := bbi
 WORKDIR_PATH := /workspace
 
 # Build the Docker image
@@ -21,6 +21,9 @@ run:
 		-v $(shell pwd):$(WORKDIR_PATH) \
 		-u $(USER_ID):$(GROUP_ID) \
 		$(IMAGE_NAME)
+
+train:
+	python train.py --verbose=600
 
 # Clean up by removing the Docker image
 clean:
