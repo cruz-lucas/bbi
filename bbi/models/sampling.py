@@ -39,15 +39,9 @@ class SamplingModel(GoRight):
         next_pos = np.clip(position + direction, 0, self.length - 1)
 
         next_status = np.random.choice(self.intensities)
-
-        if int(position) == self.length - 1:
-            # At the prize location, each prize indicator light turns on with probability 1/3 independently
-            next_prize_indicators = np.random.choice(
-                [0, 1], size=self.num_prize_indicators, p=[2/3, 1/3]
-            )
-        else:
-            next_prize_indicators = np.zeros(self.num_prize_indicators, dtype=int)
-        assert len(next_prize_indicators) == self.num_prize_indicators
+        next_prize_indicators = self._compute_next_prize_indicators(
+            next_pos, position, next_status, np.array(prize_indicators)
+        )
 
         # Update state
         self.state[0] = next_pos
@@ -58,6 +52,26 @@ class SamplingModel(GoRight):
         self.previous_status = current_status
 
         return self._get_observation(), reward, False, False, {}
+
+
+    def _compute_next_prize_indicators(
+        self,
+        next_position: float,
+        position: float,
+        next_status: int,
+        prize_indicators: np.ndarray,
+    ) -> np.ndarray:
+        """Computes the next prize indicators based on the current state."""
+        if int(next_position) == self.length - 1:
+            if int(position) == self.length - 2 and next_status == self.max_intensity:
+                return np.random.choice(
+                    [0, 1], size=self.num_prize_indicators, p=[2/3, 1/3]
+                )
+            elif all(prize_indicators == 1):
+                return prize_indicators
+            else:
+                return self._shift_prize_indicators(prize_indicators)
+        return np.zeros(self.num_prize_indicators, dtype=int)
 
     # def _compute_reward(self, next_prize_indicators: np.ndarray, action: int, position: float) -> float:
     #     """Computes the reward based on prize indicators."""
