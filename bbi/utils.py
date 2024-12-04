@@ -15,7 +15,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--config",
         type=str,
-        default="config.yaml",
+        default="bbi/config/config_q_learning.yaml",
         help="Path to the config YAML file",
     )
     parser.add_argument(

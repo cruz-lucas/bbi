@@ -25,6 +25,24 @@ run:
 train:
 	python train.py --verbose=600
 
+q-learning:
+	python train.py --verbose=600 --config="bbi/config/config_q_learning.yaml"
+
+perfect:
+	python train.py --verbose=600 --config="bbi/config/config_perfect.yaml"
+
+expect-2:
+	python train.py --verbose=600 --config="bbi/config/goright_expected_h2.yaml"
+
+expect-5:
+	python train.py --verbose=600 --config="bbi/config/goright_expected_h5.yaml"
+
+sampling-2:
+	python train.py --verbose=600 --config="bbi/config/goright_sampling_h2.yaml"
+
+sampling-5:
+	python train.py --verbose=600 --config="bbi/config/goright_sampling_h5.yaml"
+
 # Clean up by removing the Docker image
 clean:
 	docker rmi $(IMAGE_NAME)

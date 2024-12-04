@@ -1,5 +1,6 @@
 """Module containing all environments."""
 from gymnasium.envs.registration import register
+from bbi.environments.goright import GoRight
 
 ENV_CONFIGURATION = {
     "bbi/goRight-v0": {

@@ -10,9 +10,11 @@ import gymnasium as gym
 import numpy as np
 
 import wandb
-from bbi.agents.agents import QLearningAgent
+from bbi.agents import QLearningAgent
 from bbi.environments import ENV_CONFIGURATION
 from bbi.utils import load_config, parse_args
+from bbi.models import ExpectationModel
+from bbi.models import SamplingModel
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -36,6 +38,7 @@ def train_agent(seed: int, config: Dict[str, Any], return_dict: Dict[int, Any]) 
         max_horizon = config["agent"]["max_horizon"]
         verbose = config["verbose"]
         env_id = config["environment_id"]
+        model_id = config["model_id"]
         env_config = ENV_CONFIGURATION.get(env_id, {})
 
         # Initialize Weights & Biases for logging
@@ -81,6 +84,36 @@ def train_agent(seed: int, config: Dict[str, Any], return_dict: Dict[int, Any]) 
             for step in range(n_steps):
                 action = agent.get_action(obs, greedy=False)
                 next_obs, reward, terminated, truncated, info = env.step(action)
+
+                if model_id == 'perfect':
+                    model = copy.deepcopy(env)
+                elif model_id == 'expect':                    
+                    model = ExpectationModel(
+                        num_prize_indicators=env_config.get("num_prize_indicators", 2),
+                        env_length=env_config.get("env_length", 11),
+                        status_intensities=env_config.get("status_intensities", [0, 5, 10]),
+                        has_state_offset=False
+                    )
+                    model.reset(seed=episode_seed + 1_000)
+                    model.set_state(
+                        state=env.unwrapped.state,
+                        previous_status=env.unwrapped.previous_status
+                    )
+                elif model_id == 'sampling':
+                    model = SamplingModel(
+                        num_prize_indicators=env_config.get("num_prize_indicators", 2),
+                        env_length=env_config.get("env_length", 11),
+                        status_intensities=env_config.get("status_intensities", [0, 5, 10]),
+                        has_state_offset=False
+                    )
+                    model.reset(seed=episode_seed + 1_000)
+                    model.set_state(
+                        state=env.unwrapped.state,
+                        previous_status=env.unwrapped.previous_status
+                    )
+                else:
+                    model = None
+
                 td_error = agent.update_q_values(
                     obs,
                     action,
@@ -89,7 +122,7 @@ def train_agent(seed: int, config: Dict[str, Any], return_dict: Dict[int, Any]) 
                     alpha=learning_rate,
                     tau=0,
                     max_horizon=max_horizon,
-                    dynamics_model=copy.deepcopy(env),
+                    dynamics_model=model,
                 )
                 obs = next_obs
                 train_total_reward += reward

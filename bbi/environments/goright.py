@@ -32,7 +32,7 @@ class GoRight(gym.Env):
         num_prize_indicators: int = 2,
         env_length: int = 11,
         status_intensities: List[int] = [0, 5, 10],
-        has_state_offset: bool = False,
+        has_state_offset: bool = True,
         seed: Optional[int] = None,
     ) -> None:
         """Initializes the GoRight environment.
@@ -60,6 +60,9 @@ class GoRight(gym.Env):
             shape=(2 + num_prize_indicators,),
             dtype=np.float32,
         )
+
+        self.state: Optional[np.ndarray] = None
+        self.previous_status: Optional[int] = None
 
         self.seed(seed)
 
@@ -170,3 +173,13 @@ class GoRight(gym.Env):
             obs[2:] += self.prize_indicator_offsets
             return obs
         return self.state.copy()
+    
+    def set_state(self, state: np.ndarray, previous_status: int) -> None:
+        """Set environment state.
+
+        Args:
+            state (np.ndarray): _description_
+            previous_status (int): _description_
+        """
+        self.state = state
+        self.previous_status = previous_status
