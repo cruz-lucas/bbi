@@ -63,7 +63,7 @@ class SamplingModel(GoRight):
     ) -> np.ndarray:
         """Computes the next prize indicators based on the current state."""
         if int(next_position) == self.length - 1:
-            if int(position) == self.length - 2 and next_status == self.max_intensity:
+            if int(position) == self.length - 2:
                 return np.random.choice(
                     [0, 1], size=self.num_prize_indicators, p=[2/3, 1/3]
                 )

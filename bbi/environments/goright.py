@@ -139,8 +139,9 @@ class GoRight(gym.Env):
     ) -> np.ndarray:
         """Computes the next prize indicators based on the current state."""
         if int(next_position) == self.length - 1:
-            if int(position) == self.length - 2 and next_status == self.max_intensity:
-                return np.ones(self.num_prize_indicators, dtype=int)
+            if int(position) == self.length - 2:
+                if next_status == self.max_intensity:
+                    return np.ones(self.num_prize_indicators, dtype=int)
             elif all(prize_indicators == 1):
                 return prize_indicators
             else:
@@ -149,7 +150,7 @@ class GoRight(gym.Env):
 
     def _shift_prize_indicators(self, prize_indicators: np.ndarray) -> np.ndarray:
         """Shifts the prize indicators to simulate prize movement."""
-        if np.sum(prize_indicators) == 0:
+        if all(prize_indicators == 0):
             prize_indicators[0] = 1
         else:
             one_index = np.argmax(prize_indicators)
