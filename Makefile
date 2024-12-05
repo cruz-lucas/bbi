@@ -26,10 +26,10 @@ train:
 	python train.py --verbose=600
 
 q-learning:
-	python train.py --verbose=600 --config="bbi/config/config_q_learning.yaml"
+	python train.py --verbose=600 --config="bbi/config/goright_q_learning.yaml"
 
 perfect:
-	python train.py --verbose=600 --config="bbi/config/config_perfect.yaml"
+	python train.py --verbose=600 --config="bbi/config/goright_perfect.yaml"
 
 expect-2:
 	python train.py --verbose=600 --config="bbi/config/goright_expected_h2.yaml"

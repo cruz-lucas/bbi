@@ -10,7 +10,7 @@ agent:
   max_horizon: 5              # Length of rollout for MBVE
 
 environment_id: "bbi/goRight-v0"
-
+model_id: "perfect"
 
 wandb:
   project: "BBI_reproduction" # Project name for Weights & Biases logging
