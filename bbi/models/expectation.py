@@ -1,18 +1,20 @@
 """Module with expectation model."""
-from bbi.environments import GoRight
-from typing import Tuple, Dict, Any, Optional, List
-from gymnasium import spaces
+
+from typing import Any, Dict, List, Optional, Tuple
+
 import numpy as np
+
+from bbi.environments import GoRight
 
 
 class ExpectationModel(GoRight):
     def __init__(
-            self,
-            num_prize_indicators: int = 2,
-            env_length: int = 11,
-            status_intensities: List[int] = [0, 5, 10],
-            has_state_offset: bool = False,
-            seed: Optional[int] = None,
+        self,
+        num_prize_indicators: int = 2,
+        env_length: int = 11,
+        status_intensities: List[int] = [0, 5, 10],
+        has_state_offset: bool = False,
+        seed: Optional[int] = None,
     ) -> None:
         """Initializes the GoRight environment.
 
@@ -24,12 +26,12 @@ class ExpectationModel(GoRight):
             seed (Optional[int]): Seed for reproducibility.
         """
         super().__init__(
-            num_prize_indicators = num_prize_indicators,
-            env_length = env_length,
-            status_intensities = status_intensities,
-            has_state_offset = has_state_offset,
-            seed = seed
-            )
+            num_prize_indicators=num_prize_indicators,
+            env_length=env_length,
+            status_intensities=status_intensities,
+            has_state_offset=has_state_offset,
+            seed=seed,
+        )
 
     def reset(
         self,
@@ -47,7 +49,7 @@ class ExpectationModel(GoRight):
         """
         super().reset(seed=seed)
         self.state[1] = 5
-        self.previous_status = 5
+        # self.previous_status = 5
 
         return self._get_observation(), {}
 
@@ -60,12 +62,8 @@ class ExpectationModel(GoRight):
         next_status = 5
 
         next_prize_indicators = self._compute_next_prize_indicators(
-            next_position=next_pos,
-            position=position,
-            next_status=next_status,
-            prize_indicators=prize_indicators
+            next_pos, position, next_status, np.array(prize_indicators)
         )
-        assert len(next_prize_indicators) == self.num_prize_indicators
 
         # Update state
         self.state[0] = next_pos
@@ -73,12 +71,27 @@ class ExpectationModel(GoRight):
         self.state[2:] = next_prize_indicators
 
         reward = self._compute_reward(next_prize_indicators, action, position)
-        self.previous_status = current_status
+        # self.previous_status = current_status
 
         return self._get_observation(), reward, False, False, {}
-    
 
-    def _compute_reward(self, next_prize_indicators: np.ndarray, action: int, position: float) -> float:
-        """Computes the expected reward in the expectation model."""
-        return 0.0 if action == 0 else -1.0
-    
+    def _compute_next_prize_indicators(
+        self,
+        next_position: float,
+        position: float,
+        next_status: int,
+        prize_indicators: np.ndarray,
+    ) -> np.ndarray:
+        """Computes the next prize indicators based on the current state."""
+        if int(next_position) == self.length - 1:
+            if int(position) == self.length - 2:
+                return np.ones_like(prize_indicators, dtype=float) / 3.0
+            elif all(prize_indicators == 1):
+                return prize_indicators
+            else:
+                return self._shift_prize_indicators(prize_indicators)
+        return np.zeros(self.num_prize_indicators, dtype=int)
+
+    # def _compute_reward(self, next_prize_indicators: np.ndarray, action: int, position: float) -> float:
+    #     """Computes the expected reward in the expectation model."""
+    #     return 0.0 if action == 0 else -1.0

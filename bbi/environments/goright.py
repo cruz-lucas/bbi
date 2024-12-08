@@ -142,30 +142,29 @@ class GoRight(gym.Env):
         prize_indicators: np.ndarray,
     ) -> np.ndarray:
         """Computes the next prize indicators based on the current state."""
-        if int(next_position) == self.length - 1:  # next position is prize pos
-            if (
-                int(position) == self.length - 2
-            ):  # current pos is before prize pos (entering prize pos)
-                if (
-                    next_status == self.max_intensity
-                ):  # if not max int, it will exit if and not enter elif or else, going straight to return 0
+        # next position is prize pos
+        if int(next_position) == self.length - 1:
+            # current pos is before prize pos (entering prize pos)
+            if int(position) == self.length - 2:
+                # if not max int, it will exit if and not enter elif or else, going straight to return 0
+                if next_status == self.max_intensity:
                     return np.ones(self.num_prize_indicators, dtype=int)
-            elif all(
-                prize_indicators == 1
-            ):  # if current and next positions are prize pos and indicators are 1
+
+            # if current and next positions are prize pos and indicators are 1
+            elif all(prize_indicators == 1):
                 return prize_indicators
+
+            # if current and next positions are prize pos and indicators are not all 1
             else:
-                return self._shift_prize_indicators(
-                    prize_indicators
-                )  # if current and next positions are prize pos and indicators are not all 1
-        return np.zeros(
-            self.num_prize_indicators, dtype=int
-        )  # zero if next pos is not prize, or entering prize without max intensity
+                return self._shift_prize_indicators(prize_indicators)
+        # zero if next pos is not prize, or entering prize without max intensity
+        return np.zeros(self.num_prize_indicators, dtype=int)
 
     def _shift_prize_indicators(self, prize_indicators: np.ndarray) -> np.ndarray:
         """Shifts the prize indicators to simulate prize movement."""
-        if all(prize_indicators == 0):
+        if all(prize_indicators < 0.5):
             prize_indicators[0] = 1
+            prize_indicators[1:] = np.zeros_like(prize_indicators[1:])
         else:
             one_index = np.argmax(prize_indicators)
             prize_indicators[one_index] = 0
