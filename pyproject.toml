@@ -30,3 +30,6 @@ Repository = "https://github.com/me/spam.git"
 
 [tool.uv.sources]
 bbi = { workspace = true }
+
+[tool.setuptools]
+packages = ["bbi"]
