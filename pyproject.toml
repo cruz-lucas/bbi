@@ -18,6 +18,9 @@ dependencies = [
     "protobuf==5.28.3",
     "sentry-sdk==2.19.0",
     "tomli==2.0.1",
+    "setuptools==75.3.0",
+    "build==1.0.3",
+    "wheel==0.42.0",
 ]
 
 [project.urls]
