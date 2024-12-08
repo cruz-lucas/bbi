@@ -22,7 +22,7 @@ run:
 		-u $(USER_ID):$(GROUP_ID) \
 		$(IMAGE_NAME)
 
-train:
+test:
 	python train.py --verbose=600
 
 q-learning:
