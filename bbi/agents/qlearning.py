@@ -1,6 +1,6 @@
 """Module implementing a tabular Q-Learning agent."""
 
-from typing import Any, Dict, List, Optional, Tuple
+from typing import List, Optional, Tuple
 
 import gymnasium
 import numpy as np
@@ -69,7 +69,9 @@ class QLearningAgent:
         else:
             intensity_value = 2
 
-        prize_indicator = sum(int(obs[2 + i] >= 0.5) * (2**i) for i in range(self.num_prize_indicators))
+        prize_indicator = sum(
+            int(obs[2 + i] >= 0.5) * (2**i) for i in range(self.num_prize_indicators)
+        )
 
         return (
             int(round(obs[0])),
@@ -141,7 +143,9 @@ class QLearningAgent:
         terminated = False
         truncated = False
 
-        max_future_values = [self.get_max_future_q(simulated_state, terminated or truncated)]
+        max_future_values = [
+            self.get_max_future_q(simulated_state, terminated or truncated)
+        ]
 
         # Perform rollout for multi-step TD targets
         for _ in range(1, max_horizon):
@@ -149,10 +153,14 @@ class QLearningAgent:
                 break
 
             action_h = self.get_action(simulated_state, greedy=True)
-            next_simulated_state, reward_h, terminated, truncated, _ = dynamics_model.step(action_h)
+            next_simulated_state, reward_h, terminated, truncated, _ = (
+                dynamics_model.step(action_h)
+            )
             rewards.append(reward_h)
             simulated_state = next_simulated_state.copy()
-            max_future_q = self.get_max_future_q(simulated_state, terminated or truncated)
+            max_future_q = self.get_max_future_q(
+                simulated_state, terminated or truncated
+            )
             max_future_values.append(max_future_q)
 
         # Compute TD targets
@@ -160,11 +168,12 @@ class QLearningAgent:
         cumulative_reward = 0.0
         for h, reward_h in enumerate(rewards):
             cumulative_reward += (self.gamma**h) * reward_h
-            td_target = cumulative_reward + (self.gamma ** (h + 1)) * max_future_values[h]
+            td_target = (
+                cumulative_reward + (self.gamma ** (h + 1)) * max_future_values[h]
+            )
             td_targets.append(td_target)
 
-        # Calculate weights (uniform in this placeholder)
-        weights = np.ones(len(td_targets)) / len(td_targets)
+        weights = self._get_weights(td_targets)
 
         weighted_td_target = np.dot(weights, td_targets)
         td_error = weighted_td_target - self.q_values[pos, intensity, prize, action]
@@ -185,6 +194,10 @@ class QLearningAgent:
             )
 
         return td_error
+
+    def _get_weights(self, td_targets):
+        weights = np.ones(len(td_targets)) / len(td_targets)
+        return weights
 
     def get_max_future_q(self, state: np.ndarray, done: bool) -> float:
         """Retrieves the maximum future Q-value for a given state.

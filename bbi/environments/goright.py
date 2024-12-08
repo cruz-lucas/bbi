@@ -92,7 +92,9 @@ class GoRight(gym.Env):
         if self.has_state_offset:
             self.position_offset = self.np_random.uniform(-0.25, 0.25)
             self.status_indicator_offset = self.np_random.uniform(-1.25, 1.25)
-            self.prize_indicator_offsets = self.np_random.uniform(-0.25, 0.25, size=self.num_prize_indicators)
+            self.prize_indicator_offsets = self.np_random.uniform(
+                -0.25, 0.25, size=self.num_prize_indicators
+            )
 
         return self._get_observation(), {}
 
@@ -115,7 +117,9 @@ class GoRight(gym.Env):
         direction = 1 if action > 0 else -1
         next_pos = np.clip(position + direction, 0, self.length - 1)
 
-        next_status = STATUS_TABLE.get((self.previous_status, current_status), current_status)
+        next_status = STATUS_TABLE.get(
+            (self.previous_status, current_status), current_status
+        )
         next_prize_indicators = self._compute_next_prize_indicators(
             next_pos, position, next_status, np.array(prize_indicators)
         )
@@ -138,15 +142,25 @@ class GoRight(gym.Env):
         prize_indicators: np.ndarray,
     ) -> np.ndarray:
         """Computes the next prize indicators based on the current state."""
-        if int(next_position) == self.length - 1:
-            if int(position) == self.length - 2:
-                if next_status == self.max_intensity:
+        if int(next_position) == self.length - 1:  # next position is prize pos
+            if (
+                int(position) == self.length - 2
+            ):  # current pos is before prize pos (entering prize pos)
+                if (
+                    next_status == self.max_intensity
+                ):  # if not max int, it will exit if and not enter elif or else, going straight to return 0
                     return np.ones(self.num_prize_indicators, dtype=int)
-            elif all(prize_indicators == 1):
+            elif all(
+                prize_indicators == 1
+            ):  # if current and next positions are prize pos and indicators are 1
                 return prize_indicators
             else:
-                return self._shift_prize_indicators(prize_indicators)
-        return np.zeros(self.num_prize_indicators, dtype=int)
+                return self._shift_prize_indicators(
+                    prize_indicators
+                )  # if current and next positions are prize pos and indicators are not all 1
+        return np.zeros(
+            self.num_prize_indicators, dtype=int
+        )  # zero if next pos is not prize, or entering prize without max intensity
 
     def _shift_prize_indicators(self, prize_indicators: np.ndarray) -> np.ndarray:
         """Shifts the prize indicators to simulate prize movement."""
@@ -159,7 +173,9 @@ class GoRight(gym.Env):
                 prize_indicators[one_index + 1] = 1
         return prize_indicators
 
-    def _compute_reward(self, next_prize_indicators: np.ndarray, action: int, position: float) -> float:
+    def _compute_reward(
+        self, next_prize_indicators: np.ndarray, action: int, position: float
+    ) -> float:
         """Computes the reward based on the next prize indicators and action."""
         if all(next_prize_indicators == 1) and int(position) == self.length - 1:
             return 3.0
@@ -174,7 +190,7 @@ class GoRight(gym.Env):
             obs[2:] += self.prize_indicator_offsets
             return obs
         return self.state.copy()
-    
+
     def set_state(self, state: np.ndarray, previous_status: int) -> None:
         """Set environment state.
 
