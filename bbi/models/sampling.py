@@ -52,7 +52,14 @@ class SamplingModel(GoRight):
         self.state[2:] = next_prize_indicators
 
         reward = self._compute_reward(next_prize_indicators, action, position)
-        # self.previous_status = current_status
+        self.previous_status = None
+        self.last_action = action
+        self.last_pos = position
+        self.last_reward = reward
+
+        # Update cumulative stats
+        self.total_reward += reward
+        self.action_count += 1
 
         return self._get_observation(), reward, False, False, {}
 
