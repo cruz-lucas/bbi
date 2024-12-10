@@ -1,6 +1,5 @@
 """Training script."""
 
-import copy
 import logging
 import os
 import traceback
@@ -11,9 +10,8 @@ import gymnasium as gym
 import numpy as np
 
 import wandb
-from bbi.agents import QLearningAgent
+from bbi.agents import QLearningAgent, SelectivePlanningAgent, UnselectivePlanningAgent
 from bbi.environments import ENV_CONFIGURATION
-from bbi.models import ExpectationModel, SamplingModel
 from bbi.utils import load_config, parse_args
 
 # Configure logging
@@ -58,19 +56,37 @@ def train_agent(seed: int, config: Dict[str, Any], return_dict: Dict[int, Any]) 
             id=f"{config['wandb']['group_name']}_seed_{seed}_{wandb.util.generate_id()}",
         )
 
-        # Define custom metrics with their own steps
-        # wandb.define_metric("train/*", step_metric="train_step", step_sync=False)
-        # wandb.define_metric("evaluation/*", step_metric="eval_step", step_sync=False)
-
         # Initialize the environment and agent
         env = gym.make(id=env_id)
-        agent = QLearningAgent(
-            gamma=gamma,
-            action_space=env.action_space,
-            environment_length=env_config.get("env_length", 11),
-            intensities_length=len(env_config.get("status_intensities", [0, 5, 10])),
-            num_prize_indicators=env_config.get("num_prize_indicators", 2),
-        )
+
+        if (model_id == "sampling") or (model_id == "expected"):
+            agent = UnselectivePlanningAgent(
+                gamma=gamma,
+                action_space=env.action_space,
+                environment_length=env_config.get("env_length", 11),
+                intensities=env_config.get("status_intensities", [0, 5, 10]),
+                num_prize_indicators=env_config.get("num_prize_indicators", 2),
+                model_type=model_id,
+            )
+
+        elif model_id == "bbi":
+            agent = SelectivePlanningAgent(
+                gamma=gamma,
+                action_space=env.action_space,
+                environment_length=env_config.get("env_length", 11),
+                intensities=env_config.get("status_intensities", [0, 5, 10]),
+                num_prize_indicators=env_config.get("num_prize_indicators", 2),
+            )
+
+        else:
+            tau = 0
+            agent = QLearningAgent(
+                gamma=gamma,
+                action_space=env.action_space,
+                environment_length=env_config.get("env_length", 11),
+                intensities=env_config.get("status_intensities", [0, 5, 10]),
+                num_prize_indicators=env_config.get("num_prize_indicators", 2),
+            )
 
         logger.info(f"Starting training for seed {seed}")
 
@@ -85,43 +101,17 @@ def train_agent(seed: int, config: Dict[str, Any], return_dict: Dict[int, Any]) 
                 action = agent.get_action(obs, greedy=False)
                 next_obs, reward, terminated, truncated, info = env.step(action)
 
-                if model_id == "perfect":
-                    model = copy.deepcopy(env)
-                elif model_id == "expect":
-                    model = ExpectationModel(
-                        num_prize_indicators=env_config.get("num_prize_indicators", 2),
-                        env_length=env_config.get("env_length", 11),
-                        status_intensities=env_config.get(
-                            "status_intensities", [0, 5, 10]
-                        ),
-                        has_state_offset=False,
-                    )
-                    model.reset(seed=episode_seed + 1_000)
-                    model.set_state(state=env.unwrapped.state, previous_status=None)
-                elif model_id == "sampling":
-                    model = SamplingModel(
-                        num_prize_indicators=env_config.get("num_prize_indicators", 2),
-                        env_length=env_config.get("env_length", 11),
-                        status_intensities=env_config.get(
-                            "status_intensities", [0, 5, 10]
-                        ),
-                        has_state_offset=True,
-                    )
-                    model.reset(seed=episode_seed + 1_000)
-                    model.set_state(state=env.unwrapped.state, previous_status=None)
-                else:
-                    model = None
-
                 td_error = agent.update_q_values(
                     obs,
                     action,
                     reward,
                     next_obs,
                     alpha=learning_rate,
-                    tau=0,
+                    tau=tau,
                     max_horizon=max_horizon,
-                    dynamics_model=model,
+                    done=terminated or truncated,
                 )
+
                 obs = next_obs
                 train_total_reward += reward
                 td_errors.append(td_error)

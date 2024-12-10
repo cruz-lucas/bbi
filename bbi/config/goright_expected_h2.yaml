@@ -11,7 +11,7 @@ agent:
 
 environment_id: "bbi/goRight-v0"
 
-model_id: "expect"
+model_id: "expected"
 
 wandb:
   project: "BBI_reproduction" # Project name for Weights & Biases logging

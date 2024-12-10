@@ -1,5 +1,7 @@
 """Module containing all environments."""
+
 from gymnasium.envs.registration import register
+
 from bbi.environments.goright import GoRight
 
 ENV_CONFIGURATION = {
@@ -17,3 +19,5 @@ register(
     entry_point="bbi.environments.goright:GoRight",
     kwargs=ENV_CONFIGURATION.get(env_id),
 )
+
+__all__ = ["GoRight"]

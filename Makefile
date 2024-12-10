@@ -43,6 +43,9 @@ sampling-2:
 sampling-5:
 	python train.py --verbose=600 --config="bbi/config/goright_sampling_h5.yaml"
 
+bbi:
+	python train.py --verbose=600 --config="bbi/config/goright_bbi.yaml"
+
 # Clean up by removing the Docker image
 clean:
 	docker rmi $(IMAGE_NAME)

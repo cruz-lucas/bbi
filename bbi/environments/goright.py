@@ -25,7 +25,7 @@ class GoRight(gym.Env):
     The agent moves along a 1D grid, aiming to collect prizes at the end.
     """
 
-    metadata = {"render_modes": ["human"]}
+    metadata = {"render_modes": ["human"], "environment_name": "GoRight"}
 
     def __init__(
         self,
@@ -288,7 +288,9 @@ class GoRight(gym.Env):
         if self.screen is None:
             pygame.init()
             self.screen = pygame.display.set_mode((width, height))
-            pygame.display.set_caption("GoRight Environment")
+            pygame.display.set_caption(
+                f"{self.metadata.get('environment_name', 'GoRight')} Environment"
+            )
             self.clock = pygame.time.Clock()
             self.font = pygame.font.SysFont("Arial", 20)
             # Load images
@@ -308,6 +310,7 @@ class GoRight(gym.Env):
             height
             - bottom_area_height
             + (bottom_area_height - self.reset_btn_height) // 2
+            - self.margin
         )
         reset_btn_rect = pygame.Rect(
             reset_btn_x, reset_btn_y, self.reset_btn_width, self.reset_btn_height
@@ -418,45 +421,67 @@ class GoRight(gym.Env):
         status_x = self.margin
         status_y = 20  # top area
 
-        # Previous status
-        pygame.draw.rect(
-            self.screen,
-            status_color(prev_status),
-            (status_x, status_y, box_size, box_size),
-        )
-        prev_text = self.font.render(
-            str(prev_status), True, status_color(prev_status, is_text=True)
-        )
-        self.screen.blit(
-            prev_text,
-            (
-                status_x + (box_size - prev_text.get_width()) / 2,
-                status_y + (box_size - prev_text.get_height()) / 2,
-            ),
-        )
+        if self.metadata.get("environment_name") == "GoRight":
+            # Previous status
+            pygame.draw.rect(
+                self.screen,
+                status_color(prev_status),
+                (status_x, status_y, box_size, box_size),
+            )
+            prev_text = self.font.render(
+                str(prev_status), True, status_color(prev_status, is_text=True)
+            )
+            self.screen.blit(
+                prev_text,
+                (
+                    status_x + (box_size - prev_text.get_width()) / 2,
+                    status_y + (box_size - prev_text.get_height()) / 2,
+                ),
+            )
 
-        # Current status
-        pygame.draw.rect(
-            self.screen,
-            status_color(current_status),
-            (status_x + 50, status_y, box_size, box_size),
-        )
-        curr_text = self.font.render(
-            str(current_status), True, status_color(current_status, is_text=True)
-        )
-        self.screen.blit(
-            curr_text,
-            (
-                status_x + 50 + (box_size - curr_text.get_width()) / 2,
-                status_y + (box_size - curr_text.get_height()) / 2,
-            ),
-        )
+            prev_label = self.font.render("Prev", True, (0, 0, 0))
+            self.screen.blit(prev_label, (status_x, status_y + box_size + 5))
 
-        # Labels
-        prev_label = self.font.render("Prev", True, (0, 0, 0))
-        curr_label = self.font.render("Curr", True, (0, 0, 0))
-        self.screen.blit(prev_label, (status_x, status_y + box_size + 5))
-        self.screen.blit(curr_label, (status_x + 50, status_y + box_size + 5))
+            # Current status
+            pygame.draw.rect(
+                self.screen,
+                status_color(current_status),
+                (status_x + 50, status_y, box_size, box_size),
+            )
+            curr_text = self.font.render(
+                str(current_status), True, status_color(current_status, is_text=True)
+            )
+            self.screen.blit(
+                curr_text,
+                (
+                    status_x + 50 + (box_size - curr_text.get_width()) / 2,
+                    status_y + (box_size - curr_text.get_height()) / 2,
+                ),
+            )
+
+            curr_label = self.font.render("Curr", True, (0, 0, 0))
+            self.screen.blit(curr_label, (status_x + 50, status_y + box_size + 5))
+
+        else:
+            # Only current status
+            pygame.draw.rect(
+                self.screen,
+                status_color(current_status),
+                (status_x, status_y, box_size, box_size),
+            )
+            curr_text = self.font.render(
+                str(current_status), True, status_color(current_status, is_text=True)
+            )
+            self.screen.blit(
+                curr_text,
+                (
+                    status_x + (box_size - curr_text.get_width()) / 2,
+                    status_y + (box_size - curr_text.get_height()) / 2,
+                ),
+            )
+
+            curr_label = self.font.render("Curr", True, (0, 0, 0))
+            self.screen.blit(curr_label, (status_x, status_y + box_size + 5))
 
         lamps_x = width - self.margin - self.num_prize_indicators * 40
         lamp_y = 30
@@ -478,7 +503,7 @@ class GoRight(gym.Env):
         self.screen.blit(cum_reward_label, (self.margin, 190))
 
         actions_label = self.font.render(
-            f"Actions: {self.action_count}", True, (0, 0, 0)
+            f"Actions taken: {self.action_count}", True, (0, 0, 0)
         )
         self.screen.blit(actions_label, (self.margin, 210))
 

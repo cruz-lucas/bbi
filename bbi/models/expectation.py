@@ -8,6 +8,8 @@ from bbi.environments import GoRight
 
 
 class ExpectationModel(GoRight):
+    metadata = {"render_modes": ["human"], "environment_name": "Expectation Model"}
+
     def __init__(
         self,
         num_prize_indicators: int = 2,
@@ -29,7 +31,7 @@ class ExpectationModel(GoRight):
             num_prize_indicators=num_prize_indicators,
             env_length=env_length,
             status_intensities=status_intensities,
-            has_state_offset=has_state_offset,
+            has_state_offset=False,
             seed=seed,
         )
 
