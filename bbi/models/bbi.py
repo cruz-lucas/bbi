@@ -1,13 +1,13 @@
 """Module with BBI model."""
 
-from typing import List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 
-from bbi.environments import GoRight
+from .expectation import ExpectationModel
 
 
-class BBI(GoRight):
+class BBI(ExpectationModel):
     metadata = {
         "render_modes": ["human"],
         "environment_name": "1-step Predicted Variance Model",
@@ -37,26 +37,28 @@ class BBI(GoRight):
             has_state_offset=False,
             seed=seed,
         )
+        self.state_bounding_box = None
 
-    def step(self, action):
-        if self.state.ndim == 1:
-            position, current_status, *prize_indicators = self.state
-            prize_indicators_min = np.array(prize_indicators)
-            prize_indicators_max = prize_indicators_min
+    def reset(self, seed=None, options=None):
+        self.state_bounding_box = None
+        return super().reset(seed, options)
+
+    def step(self, action: int) -> Tuple[np.ndarray, float, bool, bool, Dict[str, Any]]:
+        position, current_status, *prize_indicators = self.state
+        prize_indicators = np.array(prize_indicators)
+
+        self.state, reward, terminated, truncated, _ = self._step(action)
+
+        if self.state_bounding_box is None:
+            prize_indicators_min = prize_indicators_max = prize_indicators
+
         else:
-            position_min = self.state[0, 0]
-            # position_max = self.state[1, 0]
-            # status_min_current = self.state[0, 1]
-            # status_max_current = self.state[1, 1]
-            position = position_min
-            prize_indicators_min = self.state[0, 2:]
-            prize_indicators_max = self.state[1, 2:]
-
-        direction = 1 if action > 0 else -1
-        next_pos = np.clip(position + direction, 0, self.length - 1)
+            prize_indicators_min = self.state_bounding_box[0, 2:]
+            prize_indicators_max = self.state_bounding_box[1, 2:]
 
         status_min = np.min(self.intensities)
         status_max = np.max(self.intensities)
+        next_pos = self.state[0]
 
         prize_indicators_min = self._compute_next_prize_indicators(
             next_pos, position, status_min, prize_indicators_min
@@ -67,7 +69,6 @@ class BBI(GoRight):
 
         reward_min = self._compute_reward(prize_indicators_min, action, position)
         reward_max = self._compute_reward(prize_indicators_max, action, position)
-        self.previous_status = None
 
         state_bounding_box = np.zeros((2, 2 + self.num_prize_indicators))
         state_bounding_box[0, 0] = next_pos
@@ -80,6 +81,7 @@ class BBI(GoRight):
             state_bounding_box[0, 2 + i] = p_min
             state_bounding_box[1, 2 + i] = p_max
 
-        self.state = state_bounding_box
+        self.state_bounding_box = state_bounding_box
+        self.reward_bounding_box = [reward_min, reward_max]
 
-        return state_bounding_box, np.array([reward_min, reward_max]), False, False, {}
+        return self.state, reward, terminated, truncated, {}

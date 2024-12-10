@@ -25,6 +25,7 @@ class SamplingModel(GoRight):
             has_state_offset=False,
             seed=seed,
         )
+        self.previous_status = None
 
     def reset(
         self,
@@ -33,7 +34,7 @@ class SamplingModel(GoRight):
     ) -> Tuple[np.ndarray, Dict[str, Any]]:
         super().reset(seed=seed)
         self.state[1] = np.random.choice(self.intensities)
-        # self.previous_status = np.random.choice(self.intensities)
+        self.previous_status = None
 
         return self._get_observation(), {}
 
@@ -54,7 +55,6 @@ class SamplingModel(GoRight):
         self.state[2:] = next_prize_indicators
 
         reward = self._compute_reward(next_prize_indicators, action, position)
-        self.previous_status = None
         self.last_action = action
         self.last_pos = position
         self.last_reward = reward

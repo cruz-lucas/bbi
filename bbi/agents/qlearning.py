@@ -27,15 +27,4 @@ class QLearningAgent(BaseQAgent):
         self.q_values[pos, intensity, prize, action] += alpha * td_error
         self.td_error.append(td_error)
 
-        if self.debug:
-            print(
-                {
-                    "function": "update_q_values",
-                    "state": state,
-                    "action": action,
-                    "reward": reward,
-                    "td_target": td_target,
-                    "td_error": td_error,
-                }
-            )
         return td_error

@@ -34,6 +34,7 @@ class ExpectationModel(GoRight):
             has_state_offset=False,
             seed=seed,
         )
+        self.previous_status = None
 
     def reset(
         self,
@@ -51,11 +52,16 @@ class ExpectationModel(GoRight):
         """
         super().reset(seed=seed)
         self.state[1] = 5
-        # self.previous_status = 5
+        self.previous_status = None
 
         return self._get_observation(), {}
 
     def step(self, action: int) -> Tuple[np.ndarray, float, bool, bool, Dict[str, Any]]:
+        return self._step(action)
+
+    def _step(
+        self, action: int
+    ) -> Tuple[np.ndarray, float, bool, bool, Dict[str, Any]]:
         position, current_status, *prize_indicators = self.state
 
         direction = 1 if action > 0 else -1
@@ -63,7 +69,7 @@ class ExpectationModel(GoRight):
 
         next_status = 5
 
-        next_prize_indicators = self._compute_next_prize_indicators(
+        next_prize_indicators = self._compute_expected_next_prize_indicators(
             next_pos, position, next_status, np.array(prize_indicators)
         )
 
@@ -73,7 +79,6 @@ class ExpectationModel(GoRight):
         self.state[2:] = next_prize_indicators
 
         reward = self._compute_reward(next_prize_indicators, action, position)
-        self.previous_status = None
         self.last_action = action
         self.last_pos = position
         self.last_reward = reward
@@ -84,7 +89,7 @@ class ExpectationModel(GoRight):
 
         return self._get_observation(), reward, False, False, {}
 
-    def _compute_next_prize_indicators(
+    def _compute_expected_next_prize_indicators(
         self,
         next_position: float,
         position: float,
@@ -100,7 +105,3 @@ class ExpectationModel(GoRight):
             else:
                 return self._shift_prize_indicators(prize_indicators)
         return np.zeros(self.num_prize_indicators, dtype=int)
-
-    # def _compute_reward(self, next_prize_indicators: np.ndarray, action: int, position: float) -> float:
-    #     """Computes the expected reward in the expectation model."""
-    #     return 0.0 if action == 0 else -1.0

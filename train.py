@@ -76,10 +76,10 @@ def train_agent(seed: int, config: Dict[str, Any], return_dict: Dict[int, Any]) 
                 environment_length=env_config.get("env_length", 11),
                 intensities=env_config.get("status_intensities", [0, 5, 10]),
                 num_prize_indicators=env_config.get("num_prize_indicators", 2),
+                tau=config["agent"]["tau"],
             )
 
         else:
-            tau = 0
             agent = QLearningAgent(
                 gamma=gamma,
                 action_space=env.action_space,
@@ -107,7 +107,6 @@ def train_agent(seed: int, config: Dict[str, Any], return_dict: Dict[int, Any]) 
                     reward,
                     next_obs,
                     alpha=learning_rate,
-                    tau=tau,
                     max_horizon=max_horizon,
                     done=terminated or truncated,
                 )

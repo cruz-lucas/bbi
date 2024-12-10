@@ -68,7 +68,6 @@ class UnselectivePlanningAgent(BaseQAgent):
         next_state: np.ndarray,
         alpha: float,
         max_horizon: int,
-        previous_status: int,  # only used if using perfect model
         done: bool = False,
         **kwargs,
     ) -> float:
@@ -113,17 +112,5 @@ class UnselectivePlanningAgent(BaseQAgent):
         td_error = weighted_td_target - self.q_values[pos, intensity, prize, action]
         self.q_values[pos, intensity, prize, action] += alpha * td_error
         self.td_error.append(td_error)
-
-        if self.debug:
-            print(
-                {
-                    "function": "update_q_values",
-                    "state": state,
-                    "action": action,
-                    "td_targets": td_targets,
-                    "weighted_td_target": weighted_td_target,
-                    "td_error": td_error,
-                }
-            )
 
         return td_error

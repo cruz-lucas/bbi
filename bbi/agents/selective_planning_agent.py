@@ -6,7 +6,7 @@ import gymnasium
 import numpy as np
 
 from bbi.agents import BaseQAgent
-from bbi.models import ExpectationModel
+from bbi.models import BBI
 
 
 class SelectivePlanningAgent(BaseQAgent):
@@ -20,6 +20,7 @@ class SelectivePlanningAgent(BaseQAgent):
         intensities: np.ndarray | List[int] = [0, 5, 10],
         num_prize_indicators: int = 2,
         initial_value: float = 0.0,
+        tau: float = 1.0,
         debug: bool = False,
     ):
         super().__init__(
@@ -31,11 +32,12 @@ class SelectivePlanningAgent(BaseQAgent):
             initial_value,
             debug,
         )
-        self.dynamics_model = ExpectationModel(
+        self.dynamics_model = BBI(
             num_prize_indicators=num_prize_indicators,
             env_length=environment_length,
             has_state_offset=False,
         )
+        self.tau = tau
 
     def update_q_values(
         self,
@@ -46,7 +48,6 @@ class SelectivePlanningAgent(BaseQAgent):
         alpha: float,
         max_horizon: int,
         dynamics_model: gymnasium.Env,
-        tau: float,
         done: bool = False,
         **kwargs,
     ) -> float:
@@ -90,25 +91,12 @@ class SelectivePlanningAgent(BaseQAgent):
         # For example, weights = softmax(td_targets / tau)
         td_targets_array = np.array(td_targets)
 
-        weights = self._calculate_weigths(td_targets_array, tau=tau)
+        weights = self._calculate_weigths(td_targets_array, tau=self.tau)
 
         weighted_td_target = np.dot(weights, td_targets)
         td_error = weighted_td_target - self.q_values[pos, intensity, prize, action]
         self.q_values[pos, intensity, prize, action] += alpha * td_error
         self.td_error.append(td_error)
-
-        if self.debug:
-            print(
-                {
-                    "function": "update_q_values",
-                    "state": state,
-                    "action": action,
-                    "td_targets": td_targets,
-                    "weights": weights,
-                    "weighted_td_target": weighted_td_target,
-                    "td_error": td_error,
-                }
-            )
 
         return td_error
 
