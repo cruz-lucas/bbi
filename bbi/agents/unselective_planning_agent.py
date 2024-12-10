@@ -82,7 +82,7 @@ class UnselectivePlanningAgent(BaseQAgent):
         max_future_values = [
             self.get_max_future_q(simulated_state, terminated or truncated)
         ]
-        self.dynamics_model.set_state(state=simulated_state, previous_status=state[1])
+        self.dynamics_model.set_state(state=simulated_state, previous_status=intensity)
 
         for _ in range(1, max_horizon):
             if terminated or truncated:

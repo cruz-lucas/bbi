@@ -4,7 +4,7 @@ import gymnasium as gym
 import numpy as np
 import pygame
 from gymnasium import spaces
-from pygame.locals import K_LEFT, K_RIGHT, KEYDOWN, MOUSEBUTTONUP
+from pygame.locals import K_LEFT, K_RIGHT, KEYDOWN
 
 STATUS_TABLE = {
     (0, 0): 5,
@@ -264,33 +264,21 @@ class GoRight(gym.Env):
         self.previous_status = previous_status
 
     def render(self) -> None:
-        """Renders the environment using Pygame.
-
-        This method:
-        - Initializes Pygame and creates a window if not already done.
-        - Draws the gridworld representing each position.
-        - Shows the agent's position and a circle representing the agent.
-        - Displays the last action arrow at the previous position.
-        - Shows prize indicators using lamp_on/lamp_off PNG sprites.
-        - Shows current and past status indicators with values inside the boxes.
-        - Shows the last reward obtained, cumulative reward, and action count.
-        - Displays a "Reset" button. Clicking it resets the environment.
-        - Handles keyboard and mouse events.
-        """
+        """Renders the environment using Pygame and resets on 'r' press."""
         if self.render_mode != "human":
             return
 
-        top_area_height = 100
+        env_name = self.metadata.get("environment_name")
+        top_area_height = 200 if env_name == "bbi" else 100
         bottom_area_height = 50
         width = self.margin * 2 + self.cell_size * self.length
         height = top_area_height + self.margin + self.cell_size + bottom_area_height
 
+        # Initialize Pygame screen if not done
         if self.screen is None:
             pygame.init()
             self.screen = pygame.display.set_mode((width, height))
-            pygame.display.set_caption(
-                f"{self.metadata.get('environment_name', 'GoRight')} Environment"
-            )
+            pygame.display.set_caption(f"{env_name or 'GoRight'} Environment")
             self.clock = pygame.time.Clock()
             self.font = pygame.font.SysFont("Arial", 20)
             # Load images
@@ -304,19 +292,7 @@ class GoRight(gym.Env):
                 "bbi/environments/resources/robot.png"
             ).convert_alpha()
 
-        # Reset button coordinates
-        reset_btn_x = width - self.margin - self.reset_btn_width
-        reset_btn_y = (
-            height
-            - bottom_area_height
-            + (bottom_area_height - self.reset_btn_height) // 2
-            - self.margin
-        )
-        reset_btn_rect = pygame.Rect(
-            reset_btn_x, reset_btn_y, self.reset_btn_width, self.reset_btn_height
-        )
-
-        # Process events (especially for keyboard input and mouse clicks)
+        # Handle events
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 pygame.quit()
@@ -326,15 +302,16 @@ class GoRight(gym.Env):
                     self.step(0)
                 elif event.key == K_RIGHT:
                     self.step(1)
-            elif event.type == MOUSEBUTTONUP:
-                mouse_x, mouse_y = event.pos
-                if reset_btn_rect.collidepoint(mouse_x, mouse_y):
-                    # Reset environment on button click
-                    self.reset()
+                # elif event.key == pygame.K_r:
+                #     # Call reset and reassign state/variables if needed
+                #     obs, info = self.reset()
+                #     # Ensure state reflects the reset state:
+                #     # self.state should now be the initial state set in reset()
 
-        self.screen.fill((255, 255, 255))  # white background
+        # Clear the screen
+        self.screen.fill((255, 255, 255))
 
-        # Extract current state info
+        # Extract state info after any possible reset
         position = int(self.state[0])
         current_status = int(self.state[1])
         prize_indicators = self.state[2:]
@@ -342,15 +319,12 @@ class GoRight(gym.Env):
             int(self.previous_status) if self.previous_status is not None else 0
         )
 
-        # Coordinates for the grid
+        # Draw the grid
         grid_top = 100
         grid_left = self.margin
-
-        # Draw the grid outline
         for i in range(self.length):
             rect_x = grid_left + i * self.cell_size
             rect_y = grid_top
-            # Draw cell
             pygame.draw.rect(
                 self.screen,
                 (0, 0, 0),
@@ -358,19 +332,18 @@ class GoRight(gym.Env):
                 2,
             )
 
-        # Draw the agent as a circle in the current cell
+        # Draw the agent robot
         agent_x = grid_left + position * self.cell_size + self.cell_size // 4
         agent_y = grid_top + self.cell_size // 4
-        # pygame.draw.circle(self.screen, (0, 0, 255), (agent_x, agent_y), self.cell_size // 2 - 5)
         self.screen.blit(self.robot, (agent_x, agent_y))
 
-        # Draw last action (arrow) at the previous position of the agent
+        # Draw last action arrow if any
         if self.last_action is not None and self.last_pos is not None:
             arr_x = (
                 grid_left + int(self.last_pos) * self.cell_size + self.cell_size // 2
             )
             arr_y = grid_top + self.cell_size // 2
-            if self.last_action == 0:  # Left
+            if self.last_action == 0:  # Left action
                 pygame.draw.polygon(
                     self.screen,
                     (255, 0, 0),
@@ -380,7 +353,7 @@ class GoRight(gym.Env):
                         (arr_x - self.cell_size // 2 + 10, arr_y - 10),
                     ],
                 )
-            else:  # Right
+            else:  # Right action
                 pygame.draw.polygon(
                     self.screen,
                     (255, 0, 0),
@@ -391,17 +364,9 @@ class GoRight(gym.Env):
                     ],
                 )
 
-        # Function to map status intensity to a color
-        def status_color(value, is_text: bool = False):
-            """Maps a status intensity value to a color.
-
-            Args:
-                value: The status intensity (0,5,10).
-
-            Returns:
-                A tuple representing the RGB color.
-            """
-            if is_text is False:
+        def status_color(value, is_text=False):
+            # Simple color mapping
+            if not is_text:
                 if value == 0:
                     return "#1B1D1F"
                 elif value == 5:
@@ -416,20 +381,19 @@ class GoRight(gym.Env):
                 elif value == 10:
                     return "#26282B"
 
-        # Draw status indicators (current and previous) at top-left
+        # Draw status indicators
         box_size = 40
         status_x = self.margin
-        status_y = 20  # top area
-
-        if self.metadata.get("environment_name") == "GoRight":
-            # Previous status
+        status_y = 20
+        if env_name == "GoRight":
+            # Prev status
             pygame.draw.rect(
                 self.screen,
                 status_color(prev_status),
                 (status_x, status_y, box_size, box_size),
             )
             prev_text = self.font.render(
-                str(prev_status), True, status_color(prev_status, is_text=True)
+                str(prev_status), True, status_color(prev_status, True)
             )
             self.screen.blit(
                 prev_text,
@@ -438,18 +402,17 @@ class GoRight(gym.Env):
                     status_y + (box_size - prev_text.get_height()) / 2,
                 ),
             )
-
             prev_label = self.font.render("Prev", True, (0, 0, 0))
             self.screen.blit(prev_label, (status_x, status_y + box_size + 5))
 
-            # Current status
+            # Curr status
             pygame.draw.rect(
                 self.screen,
                 status_color(current_status),
                 (status_x + 50, status_y, box_size, box_size),
             )
             curr_text = self.font.render(
-                str(current_status), True, status_color(current_status, is_text=True)
+                str(current_status), True, status_color(current_status, True)
             )
             self.screen.blit(
                 curr_text,
@@ -458,10 +421,8 @@ class GoRight(gym.Env):
                     status_y + (box_size - curr_text.get_height()) / 2,
                 ),
             )
-
             curr_label = self.font.render("Curr", True, (0, 0, 0))
             self.screen.blit(curr_label, (status_x + 50, status_y + box_size + 5))
-
         else:
             # Only current status
             pygame.draw.rect(
@@ -470,7 +431,7 @@ class GoRight(gym.Env):
                 (status_x, status_y, box_size, box_size),
             )
             curr_text = self.font.render(
-                str(current_status), True, status_color(current_status, is_text=True)
+                str(current_status), True, status_color(current_status, True)
             )
             self.screen.blit(
                 curr_text,
@@ -479,51 +440,69 @@ class GoRight(gym.Env):
                     status_y + (box_size - curr_text.get_height()) / 2,
                 ),
             )
-
             curr_label = self.font.render("Curr", True, (0, 0, 0))
             self.screen.blit(curr_label, (status_x, status_y + box_size + 5))
 
+        # Draw prize indicators
         lamps_x = width - self.margin - self.num_prize_indicators * 40
         lamp_y = 30
         for i, val in enumerate(prize_indicators):
             lamp_x = lamps_x + i * 40
-            if val > 0.5:
-                self.screen.blit(self.lamp_on, (lamp_x, lamp_y))
-            else:
-                self.screen.blit(self.lamp_off, (lamp_x, lamp_y))
+            img = self.lamp_on if val > 0.5 else self.lamp_off
+            self.screen.blit(img, (lamp_x, lamp_y))
 
+        # Show rewards and actions
         reward_label = self.font.render(
             f"Last Reward: {self.last_reward}", True, (0, 0, 0)
         )
         self.screen.blit(reward_label, (self.margin, 170))
-
         cum_reward_label = self.font.render(
             f"Cumulative Reward: {self.total_reward}", True, (0, 0, 0)
         )
         self.screen.blit(cum_reward_label, (self.margin, 190))
-
         actions_label = self.font.render(
             f"Actions taken: {self.action_count}", True, (0, 0, 0)
         )
         self.screen.blit(actions_label, (self.margin, 210))
 
-        # Draw reset button at bottom right corner
-        pygame.draw.rect(self.screen, (200, 200, 200), reset_btn_rect)
-        reset_label = self.font.render("Reset", True, (0, 0, 0))
-        self.screen.blit(
-            reset_label,
-            (
-                reset_btn_x + (self.reset_btn_width - reset_label.get_width()) / 2,
-                reset_btn_y + (self.reset_btn_height - reset_label.get_height()) / 2,
-            ),
-        )
+        # If bbi, show bounding boxes
+        if env_name == "bbi":
+            bbox_y_start = 250
+            if (
+                hasattr(self, "state_bounding_box")
+                and self.state_bounding_box is not None
+            ):
+                # pygame.draw.rect(self.screen, (220,220,220), (self.margin, bbox_y_start, 270, 50), 2)
+                state_min = self.state_bounding_box[0]
+                state_max = self.state_bounding_box[1]
+                state_min_str = "Lower State: " + np.array2string(
+                    state_min, precision=2, separator=",", suppress_small=True
+                )
+                state_max_str = "Upper State: " + np.array2string(
+                    state_max, precision=2, separator=",", suppress_small=True
+                )
+                min_text = self.font.render(state_min_str, True, (0, 0, 0))
+                max_text = self.font.render(state_max_str, True, (0, 0, 0))
+                self.screen.blit(min_text, (self.margin + 5, bbox_y_start + 5))
+                self.screen.blit(max_text, (self.margin + 5, bbox_y_start + 25))
+
+            if (
+                hasattr(self, "reward_bounding_box")
+                and self.reward_bounding_box is not None
+            ):
+                # pygame.draw.rect(self.screen, (220,220,220), (self.margin+280, bbox_y_start, 340, 50), 2)
+                reward_min, reward_max = self.reward_bounding_box
+                reward_str = f"Reward Boundaries: [{reward_min}, {reward_max}]"
+                reward_text = self.font.render(reward_str, True, (0, 0, 0))
+                self.screen.blit(reward_text, (self.margin + 295, bbox_y_start + 15))
 
         pygame.display.flip()
-        self.clock.tick(10)  # limit to 10 FPS
+        self.clock.tick(10)
 
-    def close(self):
-        """Closes the rendering window and quits Pygame."""
-        if self.screen is not None:
-            pygame.quit()
-            self.screen = None
-            self.clock = None
+
+def close(self):
+    """Closes the rendering window and quits Pygame."""
+    if self.screen is not None:
+        pygame.quit()
+        self.screen = None
+        self.clock = None

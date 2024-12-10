@@ -10,7 +10,7 @@ from .expectation import ExpectationModel
 class BBI(ExpectationModel):
     metadata = {
         "render_modes": ["human"],
-        "environment_name": "1-step Predicted Variance Model",
+        "environment_name": "bbi",
     }
 
     def __init__(
@@ -38,9 +38,11 @@ class BBI(ExpectationModel):
             seed=seed,
         )
         self.state_bounding_box = None
+        self.reward_bounding_box = None
 
     def reset(self, seed=None, options=None):
         self.state_bounding_box = None
+        self.reward_bounding_box = None
         return super().reset(seed, options)
 
     def step(self, action: int) -> Tuple[np.ndarray, float, bool, bool, Dict[str, Any]]:
@@ -50,7 +52,8 @@ class BBI(ExpectationModel):
         self.state, reward, terminated, truncated, _ = self._step(action)
 
         if self.state_bounding_box is None:
-            prize_indicators_min = prize_indicators_max = prize_indicators
+            prize_indicators_min = prize_indicators
+            prize_indicators_max = prize_indicators
 
         else:
             prize_indicators_min = self.state_bounding_box[0, 2:]

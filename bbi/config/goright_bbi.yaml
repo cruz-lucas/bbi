@@ -8,12 +8,12 @@ agent:
   learning_rate: 0.1          # Learning rate for Q-learning updates
   gamma: 0.9                  # Discount factor (gamma)
   max_horizon: 5              # Length of rollout for MBVE
-  tau: 1
+  tau: 1.0
 
 environment_id: "bbi/goRight-v0"
-model_id: "qlearning"
+model_id: "bbi"
 
 wandb:
   project: "BBI_reproduction" # Project name for Weights & Biases logging
-  notes: "Q learning with GoRight environment"  # Notes for the run
-  group_name: "goright_q_learning"
+  notes: "BBI with GoRight environment"  # Notes for the run
+  group_name: "goright_bbi"
