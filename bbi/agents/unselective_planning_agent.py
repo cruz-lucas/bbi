@@ -9,6 +9,9 @@ from bbi.agents import BaseQAgent
 from bbi.environments import GoRight
 from bbi.models import ExpectationModel, SamplingModel
 
+# logger = logging.getLogger(__name__)
+# logging.basicConfig(filename=f'logs/unselected_{datetime.now().strftime("%d%m%Y_%H:%M:%S")}.log', level=logging.INFO)
+
 
 class UnselectivePlanningAgent(BaseQAgent):
     """An agent that performs multi-step TD updates using a dynamics model, but no tau selection.
@@ -25,7 +28,6 @@ class UnselectivePlanningAgent(BaseQAgent):
         intensities: np.ndarray | List[int] = [0, 5, 10],
         num_prize_indicators: int = 2,
         initial_value: float = 0.0,
-        debug: bool = False,
         model_type: str = "Perfect",
     ):
         super().__init__(
@@ -35,7 +37,6 @@ class UnselectivePlanningAgent(BaseQAgent):
             intensities,
             num_prize_indicators,
             initial_value,
-            debug,
         )
         if model_type == "perfect":
             self.dynamics_model = GoRight(
@@ -60,6 +61,8 @@ class UnselectivePlanningAgent(BaseQAgent):
                 'Please specify the type of model for unselective planning: "Perfect", "Expectation", or "Sampling".'
             )
 
+        # logger.info(f'Model type: {model_type}')
+
     def update_q_values(
         self,
         state: np.ndarray,
@@ -82,9 +85,16 @@ class UnselectivePlanningAgent(BaseQAgent):
         max_future_values = [
             self.get_max_future_q(simulated_state, terminated or truncated)
         ]
-        self.dynamics_model.set_state(state=simulated_state, previous_status=intensity)
 
-        for _ in range(1, max_horizon):
+        next_pos, next_intensity, next_prize = self.round_obs(next_state)
+        self.dynamics_model.set_state_from_rounded(
+            state=[next_pos, next_intensity, next_prize], previous_status=intensity
+        )
+
+        # logger.info(f'----- Update begins -----')
+        # logger.info(f"Horizon 0\tState: {[pos, intensity, prize]}\tAction: {action}\tReward: {reward}\tNext State: {[next_pos, next_intensity, next_prize]}\tFuture Q: {max_future_values[-1]}")
+
+        for h in range(1, max_horizon + 1):
             if terminated or truncated:
                 break
             action_h = self.get_action(simulated_state, greedy=True)
@@ -92,10 +102,16 @@ class UnselectivePlanningAgent(BaseQAgent):
                 self.dynamics_model.step(action_h)
             )
             rewards.append(reward_h)
-            simulated_state = next_simulated_state.copy()
+
             max_future_values.append(
-                self.get_max_future_q(simulated_state, terminated or truncated)
+                self.get_max_future_q(next_simulated_state, terminated or truncated)
             )
+
+            # _pos, _intensity, _prize = self.round_obs(simulated_state)
+            # next_pos, next_intensity, next_prize = self.round_obs(next_simulated_state)
+            # logger.info(f"Horizon {h}\tState: {[_pos, _intensity, _prize]}\tAction: {action_h}\tReward: {reward_h}\tNext State: {[next_pos, next_intensity, next_prize]}\tFuture Q: {max_future_values[-1]}")
+
+            simulated_state = next_simulated_state.copy()
 
         # Compute TD targets
         td_targets = []
@@ -107,10 +123,15 @@ class UnselectivePlanningAgent(BaseQAgent):
             )
             td_targets.append(td_target)
 
+            # logger.info(f"Target {h}: {td_target}\tRewad: {reward_h}\tDiscount: {self.gamma**h}\tCumulative Reward: {cumulative_reward}\tNext Discount: {self.gamma ** (h+1)}\tFuture Q Value: {max_future_values[h]}")
+
         # Unselective = equal weighting
         weighted_td_target = np.mean(td_targets)
         td_error = weighted_td_target - self.q_values[pos, intensity, prize, action]
         self.q_values[pos, intensity, prize, action] += alpha * td_error
         self.td_error.append(td_error)
+
+        # logger.info(f"Weighted Target: {weighted_td_target}")
+        # logger.info(f"TD Error: {td_error}")
 
         return td_error

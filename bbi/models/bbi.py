@@ -10,7 +10,7 @@ from .expectation import ExpectationModel
 class BBI(ExpectationModel):
     metadata = {
         "render_modes": ["human"],
-        "environment_name": "bbi",
+        "environment_name": "BBI",
     }
 
     def __init__(
@@ -39,6 +39,9 @@ class BBI(ExpectationModel):
         )
         self.state_bounding_box = None
         self.reward_bounding_box = None
+
+        # rendering related
+        self.bottom_area_height = 150
 
     def reset(self, seed=None, options=None):
         self.state_bounding_box = None

@@ -17,13 +17,11 @@ class BaseQAgent:
         intensities: np.ndarray | List[int] = [0, 5, 10],
         num_prize_indicators: int = 2,
         initial_value: float = 0.0,
-        debug: bool = False,
     ):
         self.action_space = action_space
         self.gamma = gamma
         self.environment_length = environment_length
         self.num_prize_indicators = num_prize_indicators
-        self.debug = debug
 
         self.q_values = np.full(
             (
@@ -66,16 +64,6 @@ class BaseQAgent:
         q_values = self.q_values[pos, intensity, prize]
         max_value = np.max(q_values)
         ties = np.flatnonzero(q_values == max_value)
-
-        if self.debug:
-            print(
-                {
-                    "function": "get_action",
-                    "state": state,
-                    "q_values": q_values,
-                    "ties": ties,
-                }
-            )
 
         return int(np.random.choice(ties))
 

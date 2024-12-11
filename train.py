@@ -59,7 +59,11 @@ def train_agent(seed: int, config: Dict[str, Any], return_dict: Dict[int, Any]) 
         # Initialize the environment and agent
         env = gym.make(id=env_id)
 
-        if (model_id == "sampling") or (model_id == "expected"):
+        if (
+            (model_id == "sampling")
+            or (model_id == "expected")
+            or (model_id == "perfect")
+        ):
             agent = UnselectivePlanningAgent(
                 gamma=gamma,
                 action_space=env.action_space,

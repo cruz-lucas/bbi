@@ -21,7 +21,6 @@ class SelectivePlanningAgent(BaseQAgent):
         num_prize_indicators: int = 2,
         initial_value: float = 0.0,
         tau: float = 1.0,
-        debug: bool = False,
     ):
         super().__init__(
             action_space,
@@ -30,7 +29,6 @@ class SelectivePlanningAgent(BaseQAgent):
             intensities,
             num_prize_indicators,
             initial_value,
-            debug,
         )
         self.dynamics_model = BBI(
             num_prize_indicators=num_prize_indicators,

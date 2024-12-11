@@ -2,6 +2,7 @@
 
 from gymnasium.envs.registration import register
 
+from bbi.environments.base_env import BaseEnv
 from bbi.environments.goright import GoRight
 
 ENV_CONFIGURATION = {
@@ -20,4 +21,4 @@ register(
     kwargs=ENV_CONFIGURATION.get(env_id),
 )
 
-__all__ = ["GoRight"]
+__all__ = ["GoRight", "BaseEnv"]
