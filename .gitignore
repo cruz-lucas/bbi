@@ -167,3 +167,5 @@ artifacts/
 *.npy
 logs/*
 *.out
+output/
+tmp/
