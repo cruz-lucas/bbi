@@ -76,6 +76,15 @@ class BaseQAgent:
             max_future_q = 0.0
         return max_future_q
 
+    def get_min_future_q(self, state: np.ndarray, done: bool) -> float:
+        """Retrieves the maximum future Q-value for a given state."""
+        if not done:
+            pos, intensity, prize = self.round_obs(state)
+            max_future_q = np.min(self.q_values[pos, intensity, prize])
+        else:
+            max_future_q = 0.0
+        return max_future_q
+
     def update_q_values(
         self,
         state: np.ndarray,

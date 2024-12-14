@@ -34,6 +34,7 @@ class GoRight(BaseEnv):
         status_intensities: List[int] = [0, 5, 10],
         has_state_offset: bool = True,
         seed: Optional[int] = None,
+        render_mode: Optional[int] = "human",
     ) -> None:
         """Initializes the GoRight environment.
 
@@ -132,8 +133,7 @@ class GoRight(BaseEnv):
         """
         position, current_status, *prize_indicators = self.state
 
-        direction = 1 if action > 0 else -1
-        next_pos = np.clip(position + direction, 0, self.length - 1)
+        next_pos = self._compute_next_position(action, position)
 
         next_status = STATUS_TABLE.get(
             (self.previous_status, current_status), current_status
@@ -158,6 +158,10 @@ class GoRight(BaseEnv):
         self.action_count += 1
 
         return self._get_observation(), reward, False, False, {}
+
+    def _compute_next_position(self, action: int, position: float):
+        direction = 1 if action > 0 else -1
+        return np.clip(position + direction, 0, self.length - 1)
 
     def _compute_next_prize_indicators(
         self,
@@ -221,7 +225,7 @@ class GoRight(BaseEnv):
         """
         if all(next_prize_indicators == 1) and int(position) == self.length - 1:
             return 3.0
-        return 0.0 if action == 0 else -1.0
+        return 0.0 if action == self.LEFT else -1.0
 
     def _get_observation(self) -> np.ndarray:
         """Get the current observation with optional offsets.

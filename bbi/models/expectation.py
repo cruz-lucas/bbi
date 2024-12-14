@@ -17,6 +17,7 @@ class ExpectationModel(GoRight):
         status_intensities: List[int] = [0, 5, 10],
         has_state_offset: bool = False,
         seed: Optional[int] = None,
+        render_mode: Optional[int] = "human",
     ) -> None:
         """Initializes the GoRight environment.
 
