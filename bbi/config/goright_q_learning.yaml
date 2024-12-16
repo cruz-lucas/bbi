@@ -15,4 +15,4 @@ model_id: "qlearning"
 wandb:
   project: "BBI_reproduction" # Project name for Weights & Biases logging
   notes: "Q learning with GoRight environment"  # Notes for the run
-  group_name: "goright_q_learning_compute_can"
+  group_name: "goright_q_learning"
