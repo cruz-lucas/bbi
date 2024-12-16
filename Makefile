@@ -46,6 +46,15 @@ sampling-5:
 bounding-box:
 	python train.py --verbose=600 --config="bbi/config/goright_bbi.yaml"
 
+linear-bbi:
+	python train.py --verbose=600 --config="bbi/config/goright_bbi_linear.yaml"
+
+tree-bbi:
+	python train.py --verbose=600 --config="bbi/config/goright_bbi_tree.yaml"
+
+neural-bbi:
+	python train.py --verbose=600 --config="bbi/config/goright_bbi_neural.yaml"
+
 # Clean up by removing the Docker image
 clean:
 	docker rmi $(IMAGE_NAME)

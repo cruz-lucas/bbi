@@ -6,7 +6,7 @@ import gymnasium
 import numpy as np
 
 from bbi.agents import PlanningAgentBase
-from bbi.models import BBI
+from bbi.models import BBI, LinearBBI, NeuralBBI, RegressionTreeBBI
 
 
 class SelectivePlanningAgent(PlanningAgentBase):
@@ -21,6 +21,8 @@ class SelectivePlanningAgent(PlanningAgentBase):
         num_prize_indicators: int = 2,
         initial_value: float = 0.0,
         tau: float = 1.0,
+        model_id: str = "bbi",
+        learning_rate: float = 1e-3,
     ):
         super().__init__(
             action_space=action_space,
@@ -30,11 +32,35 @@ class SelectivePlanningAgent(PlanningAgentBase):
             num_prize_indicators=num_prize_indicators,
             initial_value=initial_value,
         )
-        self.dynamics_model = BBI(
-            num_prize_indicators=num_prize_indicators,
-            env_length=environment_length,
-            has_state_offset=False,
-        )
+
+        if model_id == "bbi":
+            self.dynamics_model = BBI(
+                num_prize_indicators=num_prize_indicators,
+                env_length=environment_length,
+                has_state_offset=False,
+            )
+        elif model_id == "bbi_linear":
+            self.dynamics_model = LinearBBI(
+                num_prize_indicators=num_prize_indicators,
+                env_length=environment_length,
+                has_state_offset=False,
+                learning_rate=learning_rate,
+            )
+        elif model_id == "bbi_tree":
+            self.dynamics_model = RegressionTreeBBI(
+                num_prize_indicators=num_prize_indicators,
+                env_length=environment_length,
+                has_state_offset=False,
+                # max_depth: int = 5,
+                # min_samples_split: int = 10
+            )
+        elif model_id == "bbi_neural":
+            self.dynamics_model = NeuralBBI(
+                num_prize_indicators=num_prize_indicators,
+                env_length=environment_length,
+                has_state_offset=False,
+                # hidden_units: int = 128,
+            )
         self.tau = tau
 
     def simulate_rollout(
