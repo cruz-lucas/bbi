@@ -170,3 +170,5 @@ logs/*
 output/
 tmp/
 *.pqt
+*.zip
+.DS_Store
