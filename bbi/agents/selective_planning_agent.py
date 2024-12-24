@@ -10,7 +10,11 @@ from bbi.models import BBI, LinearBBI, NeuralBBI, RegressionTreeBBI
 
 
 class SelectivePlanningAgent(PlanningAgentBase):
-    """An agent that performs multi-step TD updates with a dynamics model and selective weighting using tau."""
+    """An agent that performs multi-step TD updates with a dynamics model and selective weighting using tau.
+
+    Args:
+        PlanningAgentBase (_type_): _description_
+    """
 
     def __init__(
         self,
@@ -24,6 +28,19 @@ class SelectivePlanningAgent(PlanningAgentBase):
         model_id: str = "bbi",
         learning_rate: float = 1e-3,
     ):
+        """Initializes a selective planning agent with multi-step lookahead and bounding-box logic.
+
+        Args:
+            action_space (gymnasium.Space): Action space for the environment.
+            gamma (float): Discount factor.
+            environment_length (int): Size/length of the environment grid.
+            intensities (np.ndarray | List[int]): Possible status intensities.
+            num_prize_indicators (int): Number of prize indicator bits.
+            initial_value (float): Initial Q-value for all state-action pairs.
+            tau (float): Temperature parameter for weighting logic.
+            model_id (str): Specifies the type of dynamics model to use.
+            learning_rate (float): Learning rate for any learnable dynamics model.
+        """
         super().__init__(
             action_space=action_space,
             gamma=gamma,
@@ -72,8 +89,18 @@ class SelectivePlanningAgent(PlanningAgentBase):
         max_horizon: int,
         done: bool,
     ):
-        """
-        Extend the base rollout to also track bounding box rewards and values.
+        """Extends the base rollout to track upper and lower reward/Q-value bounds for bounding-box inference.
+
+        Args:
+            state (np.ndarray): The initial state before planning.
+            action (int): The initial action to simulate.
+            reward (float): Immediate reward from the real environment step.
+            next_state (np.ndarray): Next state after the first step.
+            max_horizon (int): Number of planning steps to simulate.
+            done (bool): Whether this transition was terminal.
+
+        Returns:
+            Tuple[List[float], List[float]]: The standard rollout's reward list and max future values.
         """
         rewards = [reward]
         simulated_state = next_state.copy()
@@ -134,6 +161,14 @@ class SelectivePlanningAgent(PlanningAgentBase):
         return rewards, max_future_values
 
     def compute_weights(self, td_targets: List[float], **kwargs) -> np.ndarray:
+        """Implements the selective weighting mechanism for bounding-box TD targets.
+
+        Args:
+            td_targets (List[float]): The nominal TD targets for each horizon step.
+
+        Returns:
+            np.ndarray: An array of weights computed using bounding-box uncertainty and tau.
+        """
         lower_td_targets, upper_td_targets = self._compute_bounding_box_td_targets(
             td_targets
         )
@@ -146,6 +181,14 @@ class SelectivePlanningAgent(PlanningAgentBase):
     def _compute_bounding_box_td_targets(
         self, td_targets: List[float]
     ) -> Tuple[np.ndarray, np.ndarray]:
+        """Creates upper and lower TD targets using bounding-box estimates of rewards and Q-values.
+
+        Args:
+            td_targets (List[float]): The base TD targets ignoring uncertainty.
+
+        Returns:
+            Tuple[np.ndarray, np.ndarray]: Arrays of lower and upper TD targets per horizon step.
+        """
         lower_td_targets = []
         upper_td_targets = []
         lower_cumulative_reward = 0.0
@@ -171,6 +214,15 @@ class SelectivePlanningAgent(PlanningAgentBase):
         return np.array(lower_td_targets), np.array(upper_td_targets)
 
     def _calculate_weigths(self, neg_uncertainties: np.ndarray, tau: float):
+        """Converts negative uncertainties into exponential weights for TD targets.
+
+        Args:
+            neg_uncertainties (np.ndarray): Negative uncertainties from bounding-box analysis.
+            tau (float): Temperature parameter controlling weighting sensitivity.
+
+        Returns:
+            np.ndarray: Normalized weights for each time step.
+        """
         scaled_targets = neg_uncertainties / tau
         exp_values = np.exp(scaled_targets)
         return exp_values / np.sum(exp_values)

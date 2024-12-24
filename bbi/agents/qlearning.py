@@ -18,6 +18,19 @@ class QLearningAgent(BaseQAgent):
         done: bool = False,
         **kwargs,
     ) -> float:
+        """Initializes a selective planning agent with multi-step lookahead and bounding-box logic.
+
+        Args:
+            action_space (gymnasium.Space): Action space for the environment.
+            gamma (float): Discount factor.
+            environment_length (int): Size/length of the environment grid.
+            intensities (np.ndarray | List[int]): Possible status intensities.
+            num_prize_indicators (int): Number of prize indicator bits.
+            initial_value (float): Initial Q-value for all state-action pairs.
+            tau (float): Temperature parameter for weighting logic.
+            model_id (str): Specifies the type of dynamics model to use.
+            learning_rate (float): Learning rate for any learnable dynamics model.
+        """
         pos, intensity, prize = self.round_obs(state)
 
         # 1-step TD update:

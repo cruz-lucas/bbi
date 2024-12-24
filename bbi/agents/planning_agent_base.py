@@ -1,3 +1,5 @@
+"""Base class for planning agents."""
+
 from typing import List, Tuple
 
 import numpy as np
@@ -23,11 +25,18 @@ class PlanningAgentBase(BaseQAgent):
         max_horizon: int,
         done: bool,
     ) -> Tuple[List[float], List[float]]:
-        """
-        Performs a multi-step rollout using self.dynamics_model starting from the given next_state.
+        """Simulates a multi-step rollout using a learned or provided dynamics model.
+
+        Args:
+            state (np.ndarray): The initial state for the simulation.
+            action (int): The initial action taken.
+            reward (float): The immediate reward from the first step.
+            next_state (np.ndarray): The next state after the initial action.
+            max_horizon (int): The maximum number of lookahead steps.
+            done (bool): Indicates if the episode has ended.
+
         Returns:
-            rewards: A list of rewards collected from each step (including the initial reward).
-            max_future_values: A list of maximum future Q-values for the states encountered.
+            Tuple[List[float], List[float]]: A list of rewards and a list of max future Q-values for each simulated step.
         """
         rewards = [reward]
         simulated_state = next_state.copy()
@@ -59,8 +68,14 @@ class PlanningAgentBase(BaseQAgent):
         rewards: List[float],
         max_future_values: List[float],
     ) -> List[float]:
-        """
-        Compute TD targets for each horizon step.
+        """Computes TD targets for each step of the multi-step simulation.
+
+        Args:
+            rewards (List[float]): A list of collected rewards over the rollout.
+            max_future_values (List[float]): A list of max Q-values for the corresponding states.
+
+        Returns:
+            List[float]: The computed TD targets for each horizon step.
         """
         td_targets = []
         cumulative_reward = 0.0
@@ -73,6 +88,12 @@ class PlanningAgentBase(BaseQAgent):
         return td_targets
 
     def set_model_state(self, state: np.ndarray, previous_state: np.ndarray):
+        """Synchronizes the model's internal state to match the environment's discrete representation.
+
+        Args:
+            state (np.ndarray): The current continuous or rounded state.
+            previous_state (np.ndarray): The previous state to determine transitions or status changes.
+        """
         pos, intensity, prize = self.round_obs(state)
         _, previous_intensity, _ = self.round_obs(previous_state)
 
@@ -81,9 +102,16 @@ class PlanningAgentBase(BaseQAgent):
         )
 
     def compute_weights(self, td_targets: List[float], **kwargs) -> np.ndarray:
-        """
-        Compute the weights for the TD targets.
-        This is intentionally left as a stub to be implemented by subclasses.
+        """Calculates how each TD target should be weighted in the multi-step update.
+
+        Args:
+            td_targets (List[float]): The list of computed TD targets.
+
+        Raises:
+            NotImplementedError: Must be overridden to provide weighting logic.
+
+        Returns:
+            np.ndarray: An array of weights corresponding to each TD target.
         """
         raise NotImplementedError
 
@@ -98,6 +126,20 @@ class PlanningAgentBase(BaseQAgent):
         done: bool = False,
         **kwargs,
     ) -> float:
+        """Implements a multi-step TD update using the planning logic.
+
+        Args:
+            state (np.ndarray): The current state observation.
+            action (int): The action taken.
+            reward (float): The immediate reward.
+            next_state (np.ndarray): The next state observation.
+            alpha (float): The learning rate for the Q-update.
+            max_horizon (int): The maximum lookahead steps for planning.
+            done (bool): Indicates if the episode has terminated.
+
+        Returns:
+            float: The TD error after applying the weighted multi-step update.
+        """
         pos, intensity, prize = self.round_obs(state)
 
         rewards, max_future_values = self.simulate_rollout(

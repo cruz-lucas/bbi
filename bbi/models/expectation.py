@@ -17,7 +17,7 @@ class ExpectationModel(GoRight):
         status_intensities: List[int] = [0, 5, 10],
         has_state_offset: bool = False,
         seed: Optional[int] = None,
-        render_mode: Optional[int] = "human",
+        render_mode: Optional[str] = "human",
     ) -> None:
         """Initializes the GoRight environment.
 
@@ -51,18 +51,37 @@ class ExpectationModel(GoRight):
         Returns:
             Tuple[np.ndarray, Dict[str, Any]]: Initial observation and info dictionary.
         """
-        super().reset(seed=seed)
+        if self.state is None:
+            raise ValueError("State has not been initialized.")
         self.state[1] = 5
         self.previous_status = None
 
         return self._get_observation(), {}
 
     def step(self, action: int) -> Tuple[np.ndarray, float, bool, bool, Dict[str, Any]]:
+        """_summary_
+
+        Args:
+            action (int): _description_
+
+        Returns:
+            Tuple[np.ndarray, float, bool, bool, Dict[str, Any]]: _description_
+        """
         return self._step(action)
 
     def _step(
         self, action: int
     ) -> Tuple[np.ndarray, float, bool, bool, Dict[str, Any]]:
+        """_summary_
+
+        Args:
+            action (int): _description_
+
+        Returns:
+            Tuple[np.ndarray, float, bool, bool, Dict[str, Any]]: _description_
+        """
+        if self.state is None:
+            raise ValueError("State has not been initialized.")
         position, current_status, *prize_indicators = self.state
 
         direction = 1 if action > 0 else -1
@@ -97,7 +116,17 @@ class ExpectationModel(GoRight):
         next_status: int,
         prize_indicators: np.ndarray,
     ) -> np.ndarray:
-        """Computes the next prize indicators based on the current state."""
+        """Computes the next prize indicators based on the current state.
+
+        Args:
+            next_position (float): _description_
+            position (float): _description_
+            next_status (int): _description_
+            prize_indicators (np.ndarray): _description_
+
+        Returns:
+            np.ndarray: _description_
+        """
         if int(next_position) == self.length - 1:
             if int(position) == self.length - 2:
                 return np.ones_like(prize_indicators, dtype=float) / 3.0

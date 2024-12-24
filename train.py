@@ -8,8 +8,8 @@ from typing import Any, Dict
 
 import gymnasium as gym
 import numpy as np
-
 import wandb
+
 from bbi.agents import QLearningAgent, SelectivePlanningAgent, UnselectivePlanningAgent
 from bbi.environments import ENV_CONFIGURATION
 from bbi.utils import load_config, parse_args

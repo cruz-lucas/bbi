@@ -18,6 +18,16 @@ class BaseQAgent:
         num_prize_indicators: int = 2,
         initial_value: float = 0.0,
     ):
+        """Initializes the base Q-agent with a Q-table for discrete states and actions.
+
+        Args:
+            action_space (gymnasium.Space): The space of possible actions.
+            gamma (float): Discount factor for future rewards. Defaults to 0.9.
+            environment_length (int): The size or length of the environment grid. Defaults to 11.
+            intensities (np.ndarray | List[int]): Possible status intensities. Defaults to [0, 5, 10].
+            num_prize_indicators (int): Number of prize indicator bits. Defaults to 2.
+            initial_value (float): Initial Q-value for all state-action pairs. Defaults to 0.0.
+        """
         self.action_space = action_space
         self.gamma = gamma
         self.environment_length = environment_length
@@ -36,7 +46,14 @@ class BaseQAgent:
         self.td_error: List[float] = []
 
     def round_obs(self, obs: np.ndarray) -> Tuple[int, int, int]:
-        """Discretizes the continuous observation into discrete state components."""
+        """Discretizes a continuous observation into a tuple of (position, intensity, prize).
+
+        Args:
+            obs (np.ndarray): The raw (potentially continuous) observation.
+
+        Returns:
+            Tuple[int, int, int]: The discrete state indices (position, intensity, prize).
+        """
         if obs[1] <= 2.5:
             intensity_value = 0
         elif obs[1] <= 7.5:
@@ -55,7 +72,15 @@ class BaseQAgent:
         )
 
     def get_action(self, state: np.ndarray, greedy: bool) -> int:
-        """Selects an action based on the current state."""
+        """Chooses an action given the current state and a flag indicating greedy or exploratory mode.
+
+        Args:
+            state (np.ndarray): The current state observation.
+            greedy (bool): If True, selects an action using the highest Q-value; otherwise random.
+
+        Returns:
+            int: The chosen action index.
+        """
         pos, intensity, prize = self.round_obs(state)
 
         if not greedy:
@@ -68,7 +93,15 @@ class BaseQAgent:
         return int(np.random.choice(ties))
 
     def get_max_future_q(self, state: np.ndarray, done: bool) -> float:
-        """Retrieves the maximum future Q-value for a given state."""
+        """Computes the maximum future Q-value for a given next state, respecting terminal conditions.
+
+        Args:
+            state (np.ndarray): The next state observation.
+            done (bool): Indicates if the episode has terminated.
+
+        Returns:
+            float: The maximum Q-value over all actions in the next state.
+        """
         if not done:
             pos, intensity, prize = self.round_obs(state)
             max_future_q = np.max(self.q_values[pos, intensity, prize])
@@ -77,7 +110,15 @@ class BaseQAgent:
         return max_future_q
 
     def get_min_future_q(self, state: np.ndarray, done: bool) -> float:
-        """Retrieves the maximum future Q-value for a given state."""
+        """Computes the minimum future Q-value for a given next state, respecting terminal conditions.
+
+        Args:
+            state (np.ndarray): The next state observation.
+            done (bool): Indicates if the episode has terminated.
+
+        Returns:
+            float: The minimum Q-value over all actions in the next state.
+        """
         if not done:
             pos, intensity, prize = self.round_obs(state)
             max_future_q = np.min(self.q_values[pos, intensity, prize])
@@ -94,5 +135,20 @@ class BaseQAgent:
         alpha: float,
         **kwargs,
     ) -> float:
-        """Abstract method: Implement in subclasses."""
+        """Updates the Q-table using a temporal-difference (TD) method. Must be implemented by subclasses.
+
+        Args:
+            state (np.ndarray): The current state observation.
+            action (int): The action taken.
+            reward (float): The reward received.
+            next_state (np.ndarray): The resulting next state.
+            alpha (float): The learning rate for the Q-update.
+            **kwargs: Additional parameters for specialized Q-updates.
+
+        Raises:
+            NotImplementedError: If not overridden by a subclass.
+
+        Returns:
+            float: The TD error from this update.
+        """
         raise NotImplementedError("This method should be implemented by subclasses.")

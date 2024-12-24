@@ -11,7 +11,11 @@ from bbi.models import ExpectationModel, SamplingModel
 
 
 class UnselectivePlanningAgent(PlanningAgentBase):
-    """An agent that performs multi-step TD updates using a dynamics model, with equal (unselective) weighting."""
+    """An agent that performs multi-step TD updates using a dynamics model, with equal (unselective) weighting.
+
+    Args:
+        PlanningAgentBase (_type_): _description_
+    """
 
     def __init__(
         self,
@@ -23,6 +27,17 @@ class UnselectivePlanningAgent(PlanningAgentBase):
         initial_value: float = 0.0,
         model_type: str = "perfect",
     ):
+        """Initializes an unselective planning agent that equally weights each step in the multi-step return.
+
+        Args:
+            action_space (gymnasium.Space): Action space for the environment.
+            gamma (float): Discount factor.
+            environment_length (int): Size/length of the environment grid.
+            intensities (np.ndarray | List[int]): Possible status intensities.
+            num_prize_indicators (int): Number of prize indicator bits.
+            initial_value (float): Initial Q-value for all state-action pairs.
+            model_type (str): The type of dynamics model to use ('perfect', 'expected', or 'sampling').
+        """
         super().__init__(
             action_space=action_space,
             gamma=gamma,
@@ -56,5 +71,12 @@ class UnselectivePlanningAgent(PlanningAgentBase):
             )
 
     def compute_weights(self, td_targets: List[float], **kwargs) -> np.ndarray:
-        # Unselective planning: equal weights
+        """Assigns equal weights to each horizon step in the multi-step TD update.
+
+        Args:
+            td_targets (List[float]): Computed TD targets for each step.
+
+        Returns:
+            np.ndarray: An array of equal weights, summing to 1.
+        """
         return np.ones(len(td_targets)) / len(td_targets)

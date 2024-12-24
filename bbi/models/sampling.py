@@ -17,8 +17,18 @@ class SamplingModel(GoRight):
         status_intensities: List[int] = [0, 5, 10],
         has_state_offset: bool = False,
         seed: Optional[int] = None,
-        render_mode: Optional[int] = "human",
+        render_mode: Optional[str] = "human",
     ) -> None:
+        """_summary_
+
+        Args:
+            num_prize_indicators (int, optional): _description_. Defaults to 2.
+            env_length (int, optional): _description_. Defaults to 11.
+            status_intensities (List[int], optional): _description_. Defaults to [0, 5, 10].
+            has_state_offset (bool, optional): _description_. Defaults to False.
+            seed (Optional[int], optional): _description_. Defaults to None.
+            render_mode (Optional[int], optional): _description_. Defaults to "human".
+        """
         super().__init__(
             num_prize_indicators=num_prize_indicators,
             env_length=env_length,
@@ -33,13 +43,35 @@ class SamplingModel(GoRight):
         seed: Optional[int] = None,
         options: Optional[Dict[str, Any]] = None,
     ) -> Tuple[np.ndarray, Dict[str, Any]]:
+        """_summary_
+
+        Args:
+            seed (Optional[int], optional): _description_. Defaults to None.
+            options (Optional[Dict[str, Any]], optional): _description_. Defaults to None.
+
+        Returns:
+            Tuple[np.ndarray, Dict[str, Any]]: _description_
+        """
         super().reset(seed=seed)
+
+        if self.state is None:
+            raise ValueError("State has not been initialized.")
         self.state[1] = np.random.choice(self.intensities)
         self.previous_status = None
 
         return self._get_observation(), {}
 
     def step(self, action: int) -> Tuple[np.ndarray, float, bool, bool, Dict[str, Any]]:
+        """_summary_
+
+        Args:
+            action (int): _description_
+
+        Returns:
+            Tuple[np.ndarray, float, bool, bool, Dict[str, Any]]: _description_
+        """
+        if self.state is None:
+            raise ValueError("State has not been initialized.")
         position, current_status, *prize_indicators = self.state
 
         direction = 1 if action > 0 else -1
@@ -73,7 +105,17 @@ class SamplingModel(GoRight):
         next_status: int,
         prize_indicators: np.ndarray,
     ) -> np.ndarray:
-        """Computes the next prize indicators based on the current state."""
+        """Computes the next prize indicators based on the current state.
+
+        Args:
+            next_position (float): _description_
+            position (float): _description_
+            next_status (int): _description_
+            prize_indicators (np.ndarray): _description_
+
+        Returns:
+            np.ndarray: _description_
+        """
         if int(next_position) == self.length - 1:
             if int(position) == self.length - 2:
                 return np.random.choice(

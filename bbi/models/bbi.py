@@ -20,7 +20,7 @@ class BBI(ExpectationModel):
         status_intensities: List[int] = [0, 5, 10],
         has_state_offset: bool = False,
         seed: Optional[int] = None,
-        render_mode: Optional[int] = "human",
+        render_mode: Optional[str] = "human",
     ) -> None:
         """Initializes the GoRight environment.
 
@@ -48,6 +48,15 @@ class BBI(ExpectationModel):
         self.bottom_area_height = 150
 
     def reset(self, seed=None, options=None):
+        """_summary_
+
+        Args:
+            seed (_type_, optional): _description_. Defaults to None.
+            options (_type_, optional): _description_. Defaults to None.
+
+        Returns:
+            _type_: _description_
+        """
         self.state_bounding_box = None
         self.reward_bounding_box = None
         return super().reset(seed, options)
@@ -55,6 +64,15 @@ class BBI(ExpectationModel):
     def get_next_bounds(
         self, state: np.ndarray, action_bounds: np.ndarray | List[int] = [0, 1]
     ) -> Tuple[np.ndarray, np.ndarray]:
+        """_summary_
+
+        Args:
+            state (np.ndarray): _description_
+            action_bounds (np.ndarray | List[int], optional): _description_. Defaults to [0, 1].
+
+        Returns:
+            Tuple[np.ndarray, np.ndarray]: _description_
+        """
         position, current_status, *prize_indicators = state
         prize_indicators = np.array(prize_indicators)
         if self.state_bounding_box is None:

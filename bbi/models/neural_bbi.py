@@ -1,3 +1,5 @@
+"""_summary_"""
+
 from typing import List, Optional, Tuple
 
 import numpy as np
@@ -18,10 +20,22 @@ class NeuralBBI(BBI):
         status_intensities: List[int] = [0, 5, 10],
         has_state_offset: bool = False,
         seed: Optional[int] = None,
-        render_mode: Optional[int] = "human",
+        render_mode: Optional[str] = "human",
         learning_rate: float = 0.001,
         hidden_units: int = 128,
     ):
+        """_summary_
+
+        Args:
+            num_prize_indicators (int, optional): _description_. Defaults to 2.
+            env_length (int, optional): _description_. Defaults to 11.
+            status_intensities (List[int], optional): _description_. Defaults to [0, 5, 10].
+            has_state_offset (bool, optional): _description_. Defaults to False.
+            seed (Optional[int], optional): _description_. Defaults to None.
+            render_mode (Optional[int], optional): _description_. Defaults to "human".
+            learning_rate (float, optional): _description_. Defaults to 0.001.
+            hidden_units (int, optional): _description_. Defaults to 128.
+        """
         super().__init__(
             num_prize_indicators=num_prize_indicators,
             env_length=env_length,
@@ -47,12 +61,26 @@ class NeuralBBI(BBI):
         self.batch_size = 32
 
     def _feature_vector(self, state: np.ndarray, action: int) -> torch.Tensor:
-        """Convert state-action pair to a feature vector."""
+        """Convert state-action pair to a feature vector.
+
+        Args:
+            state (np.ndarray): _description_
+            action (int): _description_
+
+        Returns:
+            torch.Tensor: _description_
+        """
         return torch.tensor(np.concatenate([state, [action]]), dtype=torch.float32)
 
     def predict(self, state: np.ndarray, action: int) -> Tuple[np.ndarray, float]:
-        """
-        Predict next state and reward, using the mean prediction.
+        """Predict next state and reward, using the mean prediction.
+
+        Args:
+            state (np.ndarray): _description_
+            action (int): _description_
+
+        Returns:
+            Tuple[np.ndarray, float]: _description_
         """
         self.model.eval()
         with torch.no_grad():
@@ -68,7 +96,14 @@ class NeuralBBI(BBI):
     def update(
         self, state: np.ndarray, action: int, next_state: np.ndarray, reward: float
     ):
-        """Store experience and train the model."""
+        """Store experience and train the model.
+
+        Args:
+            state (np.ndarray): _description_
+            action (int): _description_
+            next_state (np.ndarray): _description_
+            reward (float): _description_
+        """
         # Add experience to the buffer
         self.buffer.append((state, action, next_state, reward))
         if len(self.buffer) >= self.batch_size:
@@ -105,7 +140,15 @@ class NeuralBBI(BBI):
     def get_bounds(
         self, state: np.ndarray, action_bounds: np.ndarray
     ) -> Tuple[np.ndarray, np.ndarray]:
-        """Compute bounding-box estimates for next state and reward."""
+        """Compute bounding-box estimates for next state and reward.
+
+        Args:
+            state (np.ndarray): _description_
+            action_bounds (np.ndarray): _description_
+
+        Returns:
+            Tuple[np.ndarray, np.ndarray]: _description_
+        """
         lower_bounds = []
         upper_bounds = []
 
@@ -137,6 +180,13 @@ class QuantileNN(nn.Module):
     """Neural network predicting mean, lower, and upper quantiles."""
 
     def __init__(self, input_dim: int, output_dim: int, hidden_units: int = 128):
+        """_summary_
+
+        Args:
+            input_dim (int): _description_
+            output_dim (int): _description_
+            hidden_units (int, optional): _description_. Defaults to 128.
+        """
         super(QuantileNN, self).__init__()
         self.shared = nn.Sequential(
             nn.Linear(input_dim, hidden_units),
@@ -151,6 +201,14 @@ class QuantileNN(nn.Module):
     def forward(
         self, x: torch.Tensor
     ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        """_summary_
+
+        Args:
+            x (torch.Tensor): _description_
+
+        Returns:
+            Tuple[torch.Tensor, torch.Tensor, torch.Tensor]: _description_
+        """
         x = self.shared(x)
         mean = self.mean_head(x)
         lower = self.lower_head(x)
@@ -162,6 +220,11 @@ class PinballLoss(nn.Module):
     """Pinball loss for quantile regression."""
 
     def __init__(self, quantiles=(0.05, 0.95)):
+        """_summary_
+
+        Args:
+            quantiles (tuple, optional): _description_. Defaults to (0.05, 0.95).
+        """
         super(PinballLoss, self).__init__()
         self.quantiles = quantiles
 
@@ -172,6 +235,17 @@ class PinballLoss(nn.Module):
         upper_pred: torch.Tensor,
         targets: torch.Tensor,
     ) -> torch.Tensor:
+        """_summary_
+
+        Args:
+            mean_pred (torch.Tensor): _description_
+            lower_pred (torch.Tensor): _description_
+            upper_pred (torch.Tensor): _description_
+            targets (torch.Tensor): _description_
+
+        Returns:
+            torch.Tensor: _description_
+        """
         # Pinball loss for lower quantile
         lower_loss = torch.maximum(
             self.quantiles[0] * (targets - lower_pred),

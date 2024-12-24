@@ -1,3 +1,5 @@
+"""Module for base environemnt class."""
+
 from typing import Any, Dict, Optional, Tuple
 
 import gymnasium as gym
@@ -6,7 +8,7 @@ import numpy as np
 
 class BaseEnv(gym.Env):
     def __init__(self) -> None:
-        """"""
+        """Initializes the base environment with rendering and dimension settings."""
         super().__init__()
 
         self.LEFT = 0
@@ -37,13 +39,22 @@ class BaseEnv(gym.Env):
         self.np_random, _ = gym.utils.seeding.np_random(seed)
 
     def step(self, action: int) -> Tuple[np.ndarray, float, bool, bool, Dict[str, Any]]:
-        """Abstract method: Implement in subclasses."""
+        """Performs one timestep transition in the environment. Must be overridden.
+
+        Returns:
+            Tuple containing next observation, reward, termination flag, truncation flag, and info dictionary."""
         raise NotImplementedError("This method should be implemented by subclasses.")
 
     def _get_observation(self) -> np.ndarray:
-        """Abstract method: Implement in subclasses."""
+        """Returns the current observation of the environment's state. Must be overridden.
+
+        Returns:
+            A numpy array representing the current observation."""
         raise NotImplementedError("This method should be implemented by subclasses.")
 
     def set_state(self, state: np.ndarray, previous_status: int) -> None:
-        """Abstract method: Implement in subclasses."""
+        """Manually sets the environment's state. Must be overridden.
+
+        Returns:
+            None"""
         raise NotImplementedError("This method should be implemented by subclasses.")

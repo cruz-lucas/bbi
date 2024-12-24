@@ -1,3 +1,5 @@
+"""_summary_"""
+
 from typing import Any, Dict, List, Optional, Tuple
 
 import gymnasium as gym
@@ -34,7 +36,7 @@ class GoRight(BaseEnv):
         status_intensities: List[int] = [0, 5, 10],
         has_state_offset: bool = True,
         seed: Optional[int] = None,
-        render_mode: Optional[int] = "human",
+        render_mode: Optional[str] = "human",
     ) -> None:
         """Initializes the GoRight environment.
 
@@ -62,9 +64,8 @@ class GoRight(BaseEnv):
         )
 
         self.state: Optional[np.ndarray] = None
-        self.previous_status: Optional[int] = None
         self.render_mode = "human"
-        self.last_action = None
+        self.last_action: Optional[int] = None
         self.last_pos = None
         self.last_reward = 0.0
 
@@ -131,13 +132,16 @@ class GoRight(BaseEnv):
             truncated: Whether the episode was truncated.
             info: Additional info dictionary.
         """
+        if self.state is None:
+            raise ValueError("State has not been initialized.")
         position, current_status, *prize_indicators = self.state
 
         next_pos = self._compute_next_position(action, position)
 
         next_status = STATUS_TABLE.get(
-            (self.previous_status, current_status), current_status
+            (self.previous_status or 0, current_status or 0), current_status or 0
         )
+
         next_prize_indicators = self._compute_next_prize_indicators(
             next_pos, position, next_status, np.array(prize_indicators)
         )
@@ -160,6 +164,15 @@ class GoRight(BaseEnv):
         return self._get_observation(), reward, False, False, {}
 
     def _compute_next_position(self, action: int, position: float):
+        """Calculates the next position based on the current position and action.
+
+        Args:
+            action (int): The action taken by the agent (0: left, 1: right).
+            position (float): _description_
+
+        Returns:
+            _type_: _description_
+        """
         direction = 1 if action > 0 else -1
         return np.clip(position + direction, 0, self.length - 1)
 
@@ -233,6 +246,9 @@ class GoRight(BaseEnv):
         Returns:
             np.ndarray: The current observation.
         """
+        if self.state is None:
+            raise ValueError("State has not been initialized.")
+
         if self.has_state_offset:
             obs = self.state.copy()
             obs[0] += self.position_offset

@@ -15,13 +15,19 @@ class LinearBBI(BBI):
         status_intensities: List[int] = [0, 5, 10],
         has_state_offset: bool = False,
         seed: Optional[int] = None,
-        render_mode: Optional[int] = "human",
+        render_mode: Optional[str] = "human",
         learning_rate: float = 0.001,
     ):
-        """
-        A simple linear model for next-state and reward prediction.
-        state_dim: dimension of the state
-        action_dim: dimension of action features (e.g., 1 if discrete)
+        """A simple linear model for next-state and reward prediction.
+
+        Args:
+            num_prize_indicators (int, optional): _description_. Defaults to 2.
+            env_length (int, optional): _description_. Defaults to 11.
+            status_intensities (List[int], optional): _description_. Defaults to [0, 5, 10].
+            has_state_offset (bool, optional): _description_. Defaults to False.
+            seed (Optional[int], optional): _description_. Defaults to None.
+            render_mode (Optional[int], optional): _description_. Defaults to "human".
+            learning_rate (float, optional): _description_. Defaults to 0.001.
         """
         super().__init__(
             num_prize_indicators=num_prize_indicators,
@@ -48,14 +54,29 @@ class LinearBBI(BBI):
         self.initialized_residuals = False
 
     def _feature_vector(self, state: np.ndarray, action: int) -> np.ndarray:
+        """_summary_
+
+        Args:
+            state (np.ndarray): _description_
+            action (int): _description_
+
+        Returns:
+            np.ndarray: _description_
+        """
         # For discrete actions, we can just append the action as a scalar
         # or one-hot encode if multiple actions. Here we assume a scalar action.
         # phi = [state; action; 1]
         return np.concatenate([state, [action, 1.0]])
 
     def predict(self, state: np.ndarray, action: int) -> Tuple[np.ndarray, float]:
-        """
-        Predict next state and reward given current state and action.
+        """Predict next state and reward given current state and action.
+
+        Args:
+            state (np.ndarray): _description_
+            action (int): _description_
+
+        Returns:
+            Tuple[np.ndarray, float]: _description_
         """
         phi = self._feature_vector(state, action)
         y_pred = phi @ self.W  # shape (state_dim+1,)
@@ -66,10 +87,16 @@ class LinearBBI(BBI):
     def update(
         self, state: np.ndarray, action: int, next_state: np.ndarray, reward: float
     ):
-        """
-        Update the linear model using a simple gradient step for least squares:
+        """Update the linear model using a simple gradient step for least squares:
+
         loss = 1/2 * ||y - W^T phi||^2
         where y = [next_state; reward].
+
+        Args:
+            state (np.ndarray): _description_
+            action (int): _description_
+            next_state (np.ndarray): _description_
+            reward (float): _description_
         """
         phi = self._feature_vector(state, action)  # shape (feature_dim,)
         y = np.concatenate([next_state, [reward]])  # shape (state_dim+1,)
@@ -94,9 +121,16 @@ class LinearBBI(BBI):
     def get_bounds(
         self, state: np.ndarray, action_bounds: np.ndarray
     ) -> Tuple[np.ndarray, np.ndarray]:
-        """
-        For bounding-box inference, we consider the worst-case combination of residuals.
+        """For bounding-box inference, we consider the worst-case combination of residuals.
+
         Since we assume linearity, and no distribution of errors, we just add min/max residuals.
+
+        Args:
+            state (np.ndarray): _description_
+            action_bounds (np.ndarray): _description_
+
+        Returns:
+            Tuple[np.ndarray, np.ndarray]: _description_
         """
         # For each action in action_bounds:
         # We find min/max predictions by applying residual_min and residual_max.
@@ -132,6 +166,14 @@ class LinearBBI(BBI):
         return state_bounds, reward_bounds
 
     def step(self, action: int):
+        """_summary_
+
+        Args:
+            action (int): _description_
+
+        Returns:
+            _type_: _description_
+        """
         # The step returns the true next state and reward from the environment
         next_state, reward, done, truncated, info = super().step(action)
 
@@ -146,6 +188,15 @@ class LinearBBI(BBI):
     def get_next_bounds(
         self, state: np.ndarray, action_bounds: np.ndarray | List[int] = [0, 1]
     ) -> Tuple[np.ndarray, np.ndarray]:
+        """_summary_
+
+        Args:
+            state (np.ndarray): _description_
+            action_bounds (np.ndarray | List[int], optional): _description_. Defaults to [0, 1].
+
+        Returns:
+            Tuple[np.ndarray, np.ndarray]: _description_
+        """
         # Use the linear model to get bounding boxes
         self.state_bounding_box, self.reward_bounding_box = self.get_bounds(
             state, action_bounds

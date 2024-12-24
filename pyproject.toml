@@ -23,6 +23,7 @@ dependencies = [
     "wheel==0.42.0",
     "torch>=2.5.1",
     "pyarrow>=18.1.0",
+    "pre-commit>=4.0.1",
 ]
 
 [project.urls]

@@ -1,4 +1,6 @@
-from typing import List, Optional, Tuple
+"""_summary_"""
+
+from typing import Any, List, Optional, Tuple
 
 import numpy as np
 
@@ -9,6 +11,13 @@ class RegressionTreeNode:
     """A single node in the regression tree."""
 
     def __init__(self, depth=0, max_depth=5, min_samples_split=10):
+        """_summary_
+
+        Args:
+            depth (int, optional): _description_. Defaults to 0.
+            max_depth (int, optional): _description_. Defaults to 5.
+            min_samples_split (int, optional): _description_. Defaults to 10.
+        """
         self.is_leaf = False
         self.split_feature = None
         self.split_value = None
@@ -23,10 +32,14 @@ class RegressionTreeNode:
         self.min_samples_split = min_samples_split
 
     def fit(self, X: np.ndarray, Y: np.ndarray):
-        """
-        Recursively builds the regression tree.
+        """Recursively builds the regression tree.
+
         X: Features (state, action)
         Y: Targets (next_state, reward)
+
+        Args:
+            X (np.ndarray): _description_
+            Y (np.ndarray): _description_
         """
         # Check for leaf conditions
         if self.depth >= self.max_depth or len(X) < self.min_samples_split:
@@ -87,7 +100,14 @@ class RegressionTreeNode:
         self.right.fit(X[right_indices], Y[right_indices])
 
     def predict(self, x: np.ndarray) -> Tuple[np.ndarray, float]:
-        """Predict next state and reward for a single input."""
+        """Predict next state and reward for a single input.
+
+        Args:
+            x (np.ndarray): _description_
+
+        Returns:
+            Tuple[np.ndarray, float]: _description_
+        """
         if self.is_leaf:
             return self.state_mean, self.reward_mean
 
@@ -97,7 +117,14 @@ class RegressionTreeNode:
             return self.right.predict(x)
 
     def get_bounds(self, x: np.ndarray) -> Tuple[np.ndarray, float]:
-        """Return the bounding-box prediction for a given input."""
+        """Return the bounding-box prediction for a given input.
+
+        Args:
+            x (np.ndarray): _description_
+
+        Returns:
+            Tuple[np.ndarray, float]: _description_
+        """
         if self.is_leaf:
             return self.state_bounds, self.reward_bounds
 
@@ -115,12 +142,21 @@ class RegressionTreeBBI(BBI):
         status_intensities: List[int] = [0, 5, 10],
         has_state_offset: bool = False,
         seed: Optional[int] = None,
-        render_mode: Optional[int] = "human",
+        render_mode: Optional[str] = "human",
         max_depth: int = 5,
         min_samples_split: int = 10,
     ):
-        """
-        Regression Tree-based model for next-state and reward prediction.
+        """Regression Tree-based model for next-state and reward prediction.
+
+        Args:
+            num_prize_indicators (int, optional): _description_. Defaults to 2.
+            env_length (int, optional): _description_. Defaults to 11.
+            status_intensities (List[int], optional): _description_. Defaults to [0, 5, 10].
+            has_state_offset (bool, optional): _description_. Defaults to False.
+            seed (Optional[int], optional): _description_. Defaults to None.
+            render_mode (Optional[int], optional): _description_. Defaults to "human".
+            max_depth (int, optional): _description_. Defaults to 5.
+            min_samples_split (int, optional): _description_. Defaults to 10.
         """
         super().__init__(
             num_prize_indicators=num_prize_indicators,
@@ -132,13 +168,20 @@ class RegressionTreeBBI(BBI):
         self.tree = RegressionTreeNode(
             max_depth=max_depth, min_samples_split=min_samples_split
         )
-        self.state_action_history = []
-        self.target_history = []
+        self.state_action_history: List[Any] = []
+        self.target_history: List[Any] = []
 
     def update(
         self, state: np.ndarray, action: int, next_state: np.ndarray, reward: float
     ):
-        """Store the experience and periodically retrain the tree."""
+        """Store the experience and periodically retrain the tree.
+
+        Args:
+            state (np.ndarray): _description_
+            action (int): _description_
+            next_state (np.ndarray): _description_
+            reward (float): _description_
+        """
         # Feature vector: state + action
         phi = np.concatenate([state, [action]])
         target = np.concatenate([next_state, [reward]])
@@ -153,7 +196,14 @@ class RegressionTreeBBI(BBI):
             self.tree.fit(X, Y)
 
     def step(self, action: int):
-        """Perform the step and update the tree."""
+        """Perform the step and update the tree.
+
+        Args:
+            action (int): _description_
+
+        Returns:
+            _type_: _description_
+        """
         next_state, reward, done, truncated, info = super().step(action)
         self.update(self.state, action, next_state, reward)
         return next_state, reward, done, truncated, info
@@ -161,8 +211,17 @@ class RegressionTreeBBI(BBI):
     def get_next_bounds(
         self, state: np.ndarray, action_bounds: np.ndarray | List[int] = [0, 1]
     ) -> Tuple[np.ndarray, np.ndarray]:
-        """Predict bounding-box for next states and rewards given action bounds."""
-        state_bounds_list, reward_bounds_list = [], []
+        """Predict bounding-box for next states and rewards given action bounds.
+
+        Args:
+            state (np.ndarray): _description_
+            action_bounds (np.ndarray | List[int], optional): _description_. Defaults to [0, 1].
+
+        Returns:
+            Tuple[np.ndarray, np.ndarray]: _description_
+        """
+        state_bounds_list = []
+        reward_bounds_list = []
 
         for action in action_bounds:
             phi = np.concatenate([state, [action]])
