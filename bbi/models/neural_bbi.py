@@ -251,12 +251,12 @@ class PinballLoss(nn.Module):
             self.quantiles[0] * (targets - lower_pred),
             (1 - self.quantiles[0]) * (lower_pred - targets),
         )
-        # Pinball loss for upper quantile
+
         upper_loss = torch.maximum(
             self.quantiles[1] * (targets - upper_pred),
             (1 - self.quantiles[1]) * (upper_pred - targets),
         )
-        # Mean squared error for mean prediction
+
         mean_loss = torch.nn.functional.mse_loss(mean_pred, targets)
 
         return mean_loss + lower_loss.mean() + upper_loss.mean()
