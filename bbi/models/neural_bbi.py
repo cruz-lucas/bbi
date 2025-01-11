@@ -45,7 +45,7 @@ class NeuralBBI(BBI):
         )
         self.learning_rate = learning_rate
         self.state_dim = 2 + num_prize_indicators
-        self.action_dim = 1  # Assume scalar action
+        self.action_dim = 1
         self.output_dim = self.state_dim + 1  # Next-state + reward prediction
 
         # Define neural network with three outputs: mean, upper, and lower quantiles
@@ -104,7 +104,6 @@ class NeuralBBI(BBI):
             next_state (np.ndarray): _description_
             reward (float): _description_
         """
-        # Add experience to the buffer
         self.buffer.append((state, action, next_state, reward))
         if len(self.buffer) >= self.batch_size:
             self._train()
@@ -113,11 +112,9 @@ class NeuralBBI(BBI):
         """Train the neural network using experiences from the buffer."""
         self.model.train()
 
-        # Sample a minibatch
         batch = np.random.choice(len(self.buffer), self.batch_size, replace=False)
         states, actions, next_states, rewards = zip(*[self.buffer[i] for i in batch])
 
-        # Convert to tensors
         inputs = torch.stack(
             [self._feature_vector(s, a) for s, a in zip(states, actions)]
         )
@@ -126,13 +123,9 @@ class NeuralBBI(BBI):
             dtype=torch.float32,
         )
 
-        # Forward pass
         mean_pred, lower_pred, upper_pred = self.model(inputs)
-
-        # Compute losses using Pinball loss for quantiles
         loss = self.loss_fn(mean_pred, lower_pred, upper_pred, targets)
 
-        # Backward pass
         self.optimizer.zero_grad()
         loss.backward()
         self.optimizer.step()
@@ -154,9 +147,7 @@ class NeuralBBI(BBI):
 
         for action in action_bounds:
             with torch.no_grad():
-                phi = self._feature_vector(state, action).unsqueeze(
-                    0
-                )  # Add batch dimension
+                phi = self._feature_vector(state, action).unsqueeze(0)
                 _, lower_pred, upper_pred = self.model(phi)
 
             lower_pred = lower_pred.squeeze(0).numpy()

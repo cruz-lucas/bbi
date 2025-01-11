@@ -1,10 +1,11 @@
 """Base class for planning agents."""
 
-from typing import List, Tuple
+from typing import Dict, List, Tuple
 
 import numpy as np
 
 from bbi.agents import BaseQAgent
+from bbi.environments import BaseEnv
 
 
 class PlanningAgentBase(BaseQAgent):
@@ -16,52 +17,47 @@ class PlanningAgentBase(BaseQAgent):
     - Leaves weight computation (and potentially bounding box logic) to subclasses.
     """
 
+    def __init__(
+        self,
+        number_actions: int = 2,
+        number_positions: int = 11,
+        number_intensities: int = 3,
+        number_prize_indicators: int = 2,
+        discount: float = 0.9,
+        initial_value: float = 0.0,
+    ):
+        super().__init__(
+            number_actions=number_actions,
+            number_positions=number_positions,
+            number_intensities=number_intensities,
+            number_prize_indicators=number_prize_indicators,
+            discount=discount,
+            initial_value=initial_value,
+        )
+
     def simulate_rollout(
         self,
-        state: np.ndarray,
-        action: int,
+        obs: Dict[str, float | int | np.ndarray],
         reward: float,
-        next_state: np.ndarray,
         max_horizon: int,
         done: bool,
+        model: BaseEnv,
+        **kwargs,
     ) -> Tuple[List[float], List[float]]:
         """Simulates a multi-step rollout using a learned or provided dynamics model.
 
         Args:
-            state (np.ndarray): The initial state for the simulation.
+            obs (Observation): The initial state for the simulation.
             action (int): The initial action taken.
             reward (float): The immediate reward from the first step.
-            next_state (np.ndarray): The next state after the initial action.
+            next_obs (Observation): The next state after the initial action.
             max_horizon (int): The maximum number of lookahead steps.
             done (bool): Indicates if the episode has ended.
 
         Returns:
             Tuple[List[float], List[float]]: A list of rewards and a list of max future Q-values for each simulated step.
         """
-        rewards = [reward]
-        simulated_state = next_state.copy()
-        terminated = done
-        truncated = False
-
-        max_future_values = [
-            self.get_max_future_q(simulated_state, terminated or truncated)
-        ]
-        self.set_model_state(simulated_state, state)
-
-        for h in range(1, max_horizon + 1):
-            if terminated or truncated:
-                break
-            action_h = self.get_action(simulated_state, greedy=True)
-            next_simulated_state, reward_h, terminated, truncated, _ = (
-                self.dynamics_model.step(action_h)
-            )
-            rewards.append(reward_h)
-            max_future_values.append(
-                self.get_max_future_q(next_simulated_state, terminated or truncated)
-            )
-            simulated_state = next_simulated_state.copy()
-
-        return rewards, max_future_values
+        raise NotImplementedError("This method should be implemented by subclasses.")
 
     def compute_td_targets(
         self,
@@ -80,26 +76,12 @@ class PlanningAgentBase(BaseQAgent):
         td_targets = []
         cumulative_reward = 0.0
         for h, reward_h in enumerate(rewards):
-            cumulative_reward += (self.gamma**h) * reward_h
+            cumulative_reward += (self.discount**h) * reward_h
             td_target = (
-                cumulative_reward + (self.gamma ** (h + 1)) * max_future_values[h]
+                cumulative_reward + (self.discount ** (h + 1)) * max_future_values[h]
             )
             td_targets.append(td_target)
         return td_targets
-
-    def set_model_state(self, state: np.ndarray, previous_state: np.ndarray):
-        """Synchronizes the model's internal state to match the environment's discrete representation.
-
-        Args:
-            state (np.ndarray): The current continuous or rounded state.
-            previous_state (np.ndarray): The previous state to determine transitions or status changes.
-        """
-        pos, intensity, prize = self.round_obs(state)
-        _, previous_intensity, _ = self.round_obs(previous_state)
-
-        self.dynamics_model.set_state_from_rounded(
-            state=[pos, intensity, prize], previous_status=previous_intensity
-        )
 
     def compute_weights(self, td_targets: List[float], **kwargs) -> np.ndarray:
         """Calculates how each TD target should be weighted in the multi-step update.
@@ -117,12 +99,13 @@ class PlanningAgentBase(BaseQAgent):
 
     def update_q_values(
         self,
-        state: np.ndarray,
+        obs: Dict[str, float | int | np.ndarray],
         action: int,
         reward: float,
-        next_state: np.ndarray,
+        next_obs: Dict[str, float | int | np.ndarray],
         alpha: float,
         max_horizon: int,
+        model: BaseEnv,
         done: bool = False,
         **kwargs,
     ) -> float:
@@ -140,23 +123,36 @@ class PlanningAgentBase(BaseQAgent):
         Returns:
             float: The TD error after applying the weighted multi-step update.
         """
-        pos, intensity, prize = self.round_obs(state)
+        obs = self.round_obs(obs)
+        next_obs = self.round_obs(next_obs)
 
         rewards, max_future_values = self.simulate_rollout(
-            state=state,
-            action=action,
+            next_obs=next_obs,
             reward=reward,
-            next_state=next_state,
             max_horizon=max_horizon,
             done=done,
+            model=model,
         )
 
         td_targets = self.compute_td_targets(rewards, max_future_values)
         weights = self.compute_weights(td_targets, **kwargs)
         weighted_td_target = np.dot(weights, td_targets)
 
-        td_error = weighted_td_target - self.q_values[pos, intensity, prize, action]
-        self.q_values[pos, intensity, prize, action] += alpha * td_error
+        td_error = (
+            weighted_td_target
+            - self.q_values[
+                obs["position"],
+                obs["status_indicator"],
+                obs["prize_indicators"],
+                action,
+            ]
+        )
+        self.q_values[
+            obs["position"],
+            obs["status_indicator"],
+            obs["prize_indicators"],
+            action,
+        ] += alpha * td_error
         self.td_error.append(td_error)
 
         return td_error

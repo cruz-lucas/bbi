@@ -7,18 +7,8 @@ import numpy as np
 from gymnasium import spaces
 
 from bbi.environments.base_env import BaseEnv
-
-STATUS_TABLE = {
-    (0, 0): 5,
-    (0, 5): 0,
-    (0, 10): 5,
-    (5, 0): 10,
-    (5, 5): 10,
-    (5, 10): 10,
-    (10, 0): 0,
-    (10, 5): 5,
-    (10, 10): 0,
-}
+from bbi.utils.constants import STATUS_TRANSITION
+from bbi.utils.dataclasses import Action, State, Tracker
 
 
 class GoRight(BaseEnv):
@@ -36,7 +26,6 @@ class GoRight(BaseEnv):
         status_intensities: List[int] = [0, 5, 10],
         has_state_offset: bool = True,
         seed: Optional[int] = None,
-        render_mode: Optional[str] = "human",
     ) -> None:
         """Initializes the GoRight environment.
 
@@ -52,42 +41,45 @@ class GoRight(BaseEnv):
         self.length = env_length
         self.max_intensity = max(status_intensities)
         self.intensities = status_intensities
-        self.previous_status: Optional[int] = None
         self.has_state_offset = has_state_offset
 
-        self.action_space = spaces.Discrete(2)  # 0: left, 1: right
-        self.observation_space = spaces.Box(
-            low=0.0,
-            high=max(env_length - 1, self.max_intensity, 1.0),
-            shape=(2 + num_prize_indicators,),
-            dtype=np.float32,
+        self.max_offset_pos = 0.25
+        self.max_status_pos = 1.25
+        self.max_prize_pos = 0.25
+
+        self.action_space: gym.Space = spaces.Discrete(2)  # 0: left, 1: right
+        self.observation_space = spaces.Dict(
+            {
+                "position": spaces.Box(
+                    low=-0.25,
+                    high=11.25,
+                    shape=(1,),
+                    dtype=np.float32,
+                ),
+                "status_indicator": spaces.Box(
+                    low=-1.25,
+                    high=11.25,
+                    shape=(1,),
+                    dtype=np.float32,
+                ),
+                "prize_indicators": spaces.Box(
+                    low=-0.25,
+                    high=1.25,
+                    shape=(self.num_prize_indicators,),
+                    dtype=np.float32,
+                ),
+            }
         )
 
-        self.state: Optional[np.ndarray] = None
-        self.render_mode = "human"
-        self.last_action: Optional[int] = None
-        self.last_pos = None
-        self.last_reward = 0.0
-
-        # Track cumulative reward and action count per episode
-        self.total_reward = 0.0
-        self.action_count = 0
+        self.state: Optional[State] = None
 
         self.seed(seed)
-
-    def seed(self, seed: Optional[int] = None) -> None:
-        """Sets the seed for the environment's random number generator.
-
-        Args:
-            seed: The seed value.
-        """
-        self.np_random, _ = gym.utils.seeding.np_random(seed)
 
     def reset(
         self,
         seed: Optional[int] = None,
         options: Optional[Dict[str, Any]] = None,
-    ) -> Tuple[np.ndarray, Dict[str, Any]]:
+    ) -> Tuple[State, Dict[str, Any]]:
         """Resets the environment to its initial state.
 
         Args:
@@ -99,27 +91,35 @@ class GoRight(BaseEnv):
             info: Additional info dictionary.
         """
         super().reset(seed=seed)
-        self.state = np.zeros(2 + self.num_prize_indicators, dtype=np.float32)
-        self.state[1] = self.np_random.choice(self.intensities)
-        self.previous_status = self.np_random.choice(self.intensities)
-        self.last_action = None
-        self.last_pos = None
-        self.last_reward = 0.0
+        self.tracker: Tracker = Tracker()
 
-        # Reset cumulative stats
-        self.total_reward = 0.0
-        self.action_count = 0
-
-        if self.has_state_offset:
-            self.position_offset = self.np_random.uniform(-0.25, 0.25)
-            self.status_indicator_offset = self.np_random.uniform(-1.25, 1.25)
-            self.prize_indicator_offsets = self.np_random.uniform(
-                -0.25, 0.25, size=self.num_prize_indicators
+        position_offset = self.np_random.uniform(-0.25, 0.25)
+        status_offset = self.np_random.uniform(-1.25, 1.25)
+        prize_offset = self.np_random.uniform(
+            -0.25, 0.25, size=self.num_prize_indicators
+        )
+        self.offset = (
+            np.concatenate(
+                [
+                    [position_offset, status_offset, status_offset],
+                    prize_offset,
+                ]
             )
+            if self.has_state_offset
+            else None
+        )
 
-        return self._get_observation(), {}
+        self.state = State(
+            position=0,
+            previous_status_indicator=self.np_random.choice(self.intensities),
+            current_status_indicator=self.np_random.choice(self.intensities),
+            prize_indicators=np.zeros((self.num_prize_indicators)),
+            offset=self.offset,
+        )
 
-    def step(self, action: int) -> Tuple[np.ndarray, float, bool, bool, Dict[str, Any]]:
+        return self.state.get_observation(), {}
+
+    def step(self, action: int) -> Tuple[State, float, bool, bool, Dict[str, Any]]:
         """Executes one time step within the environment.
 
         Args:
@@ -134,75 +134,78 @@ class GoRight(BaseEnv):
         """
         if self.state is None:
             raise ValueError("State has not been initialized.")
-        position, current_status, *prize_indicators = self.state
 
-        next_pos = self._compute_next_position(action, position)
+        current_state: State = self.state
 
-        next_status = STATUS_TABLE.get(
-            (self.previous_status or 0, current_status or 0), current_status or 0
+        next_pos = self._compute_next_position(action, current_state)
+        next_status = STATUS_TRANSITION.get(
+            (
+                current_state.previous_status_indicator,
+                current_state.current_status_indicator,
+            ),
+            None,
         )
 
         next_prize_indicators = self._compute_next_prize_indicators(
-            next_pos, position, next_status, np.array(prize_indicators)
+            next_pos, next_status, current_state
         )
 
-        # Update state
-        self.state[0] = next_pos
-        self.state[1] = next_status
-        self.state[2:] = next_prize_indicators
+        reward = self._compute_reward(next_prize_indicators, action, current_state)
 
-        reward = self._compute_reward(next_prize_indicators, action, position)
-        self.previous_status = current_status
-        self.last_action = action
-        self.last_pos = position
-        self.last_reward = reward
+        self.state.set_state(
+            position=next_pos,
+            previous_status_indicator=current_state.current_status_indicator,
+            current_status_indicator=next_status,
+            prize_indicators=next_prize_indicators,
+        )
 
-        # Update cumulative stats
-        self.total_reward += reward
-        self.action_count += 1
+        self.tracker.record(
+            state=current_state, action=action, reward=reward, next_state=self.state
+        )
 
-        return self._get_observation(), reward, False, False, {}
+        return self.state.get_observation(), reward, False, False, {}
 
-    def _compute_next_position(self, action: int, position: float):
+    def _compute_next_position(self, action: int, state: State) -> int:
         """Calculates the next position based on the current position and action.
 
         Args:
             action (int): The action taken by the agent (0: left, 1: right).
-            position (float): _description_
+            state (State): The current state.
 
         Returns:
-            _type_: _description_
+            int: The next position
         """
         direction = 1 if action > 0 else -1
-        return np.clip(position + direction, 0, self.length - 1)
+        return np.clip(state.position + direction, 0, self.length - 1)
 
     def _compute_next_prize_indicators(
         self,
         next_position: float,
-        position: float,
         next_status: int,
-        prize_indicators: np.ndarray,
+        current_state: State,
     ) -> np.ndarray:
         """Computes the next prize indicators based on the current state.
 
         Args:
             next_position (float): The agent's next position in the grid.
-            position (float): The agent's current position before moving.
             next_status (int): The next status intensity of the environment after the move.
-            prize_indicators (np.ndarray): The current array of prize indicators before the move.
+            current_state (State):
 
         Returns:
             np.ndarray: An updated array of prize indicators.
         """
+        position, _, _, *prize_indicators = current_state.get_state()
+
+        prize_indicators = np.array(prize_indicators)
         if int(next_position) == self.length - 1:
             if int(position) == self.length - 2:
                 if next_status == self.max_intensity:
-                    return np.ones(self.num_prize_indicators, dtype=int)
+                    return np.ones_like(prize_indicators, dtype=int)
             elif all(prize_indicators == 1):
                 return prize_indicators
             else:
                 return self._shift_prize_indicators(prize_indicators)
-        return np.zeros(self.num_prize_indicators, dtype=int)
+        return np.zeros_like(prize_indicators, dtype=int)
 
     def _shift_prize_indicators(self, prize_indicators: np.ndarray) -> np.ndarray:
         """Shift prize indicators forward, simulating their movement.
@@ -224,58 +227,18 @@ class GoRight(BaseEnv):
         return prize_indicators
 
     def _compute_reward(
-        self, next_prize_indicators: np.ndarray, action: int, position: float
+        self, next_prize_indicators: np.ndarray, action: int, state: State
     ) -> float:
         """Compute the reward based on action and prize indicators.
 
         Args:
             next_prize_indicators (np.ndarray): Updated prize indicators.
             action (int): Action taken by the agent.
-            position (float): Agent's current position.
+            state (State):
 
         Returns:
             float: Calculated reward.
         """
-        if all(next_prize_indicators == 1) and int(position) == self.length - 1:
+        if all(next_prize_indicators == 1) and int(state.position) == self.length - 1:
             return 3.0
-        return 0.0 if action == self.LEFT else -1.0
-
-    def _get_observation(self) -> np.ndarray:
-        """Get the current observation with optional offsets.
-
-        Returns:
-            np.ndarray: The current observation.
-        """
-        if self.state is None:
-            raise ValueError("State has not been initialized.")
-
-        if self.has_state_offset:
-            obs = self.state.copy()
-            obs[0] += self.position_offset
-            obs[1] += self.status_indicator_offset
-            obs[2:] += self.prize_indicator_offsets
-            return obs
-        return self.state.copy()
-
-    def set_state(self, state: np.ndarray, previous_status: int) -> None:
-        """Set the environment state.
-
-        Args:
-            state (np.ndarray): The new state.
-            previous_status (int): Previous status intensity.
-        """
-        self.state = state
-        self.previous_status = previous_status
-
-    def set_state_from_rounded(self, state: np.ndarray, previous_status: int) -> None:
-        """Set the environment state.
-
-        Args:
-            state (np.ndarray): The new state.
-            previous_status (int): Previous status intensity.
-        """
-        prize = [int(i) for i in list(bin(state[-1])[2:])]
-        if len(prize) == 1:
-            prize = [0] + prize
-        self.state = np.array([state[0], state[1] * 5] + prize)
-        self.previous_status = previous_status * 5
+        return 0.0 if action == Action.left else -1.0

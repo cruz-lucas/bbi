@@ -5,6 +5,7 @@ from typing import Any, Dict, List, Optional, Tuple
 import numpy as np
 
 from bbi.environments import GoRight
+from bbi.utils.dataclasses import State
 
 
 class ExpectationModel(GoRight):
@@ -15,9 +16,7 @@ class ExpectationModel(GoRight):
         num_prize_indicators: int = 2,
         env_length: int = 11,
         status_intensities: List[int] = [0, 5, 10],
-        has_state_offset: bool = False,
         seed: Optional[int] = None,
-        render_mode: Optional[str] = "human",
     ) -> None:
         """Initializes the GoRight environment.
 
@@ -35,7 +34,6 @@ class ExpectationModel(GoRight):
             has_state_offset=False,
             seed=seed,
         )
-        self.previous_status = None
 
     def reset(
         self,
@@ -51,12 +49,13 @@ class ExpectationModel(GoRight):
         Returns:
             Tuple[np.ndarray, Dict[str, Any]]: Initial observation and info dictionary.
         """
+        super().reset(seed=seed)
+
         if self.state is None:
             raise ValueError("State has not been initialized.")
-        self.state[1] = 5
-        self.previous_status = None
+        self.state.current_status_indicator = 5
 
-        return self._get_observation(), {}
+        return self.state.get_observation(), {}
 
     def step(self, action: int) -> Tuple[np.ndarray, float, bool, bool, Dict[str, Any]]:
         """_summary_
@@ -82,39 +81,34 @@ class ExpectationModel(GoRight):
         """
         if self.state is None:
             raise ValueError("State has not been initialized.")
-        position, current_status, *prize_indicators = self.state
 
-        direction = 1 if action > 0 else -1
-        next_pos = np.clip(position + direction, 0, self.length - 1)
+        current_state: State = self.state
 
+        next_pos = self._compute_next_position(action, current_state)
         next_status = 5
-
         next_prize_indicators = self._compute_expected_next_prize_indicators(
-            next_pos, position, next_status, np.array(prize_indicators)
+            next_pos, current_state
         )
 
-        # Update state
-        self.state[0] = next_pos
-        self.state[1] = next_status
-        self.state[2:] = next_prize_indicators
+        reward = self._compute_reward(next_prize_indicators, action, current_state)
 
-        reward = self._compute_reward(next_prize_indicators, action, position)
-        self.last_action = action
-        self.last_pos = position
-        self.last_reward = reward
+        self.state = State(
+            position=next_pos,
+            previous_status_indicator=current_state.current_status_indicator,
+            current_status_indicator=next_status,
+            prize_indicators=next_prize_indicators,
+        )
 
-        # Update cumulative stats
-        self.total_reward += reward
-        self.action_count += 1
+        self.tracker.record(
+            state=current_state, action=action, reward=reward, next_state=self.state
+        )
 
-        return self._get_observation(), reward, False, False, {}
+        return self.state.get_observation(), reward, False, False, {}
 
     def _compute_expected_next_prize_indicators(
         self,
         next_position: float,
-        position: float,
-        next_status: int,
-        prize_indicators: np.ndarray,
+        current_state: State,
     ) -> np.ndarray:
         """Computes the next prize indicators based on the current state.
 
@@ -127,6 +121,9 @@ class ExpectationModel(GoRight):
         Returns:
             np.ndarray: _description_
         """
+        position, _, _, *prize_indicators = current_state.get_state()
+
+        prize_indicators = np.array(prize_indicators)
         if int(next_position) == self.length - 1:
             if int(position) == self.length - 2:
                 return np.ones_like(prize_indicators, dtype=float) / 3.0

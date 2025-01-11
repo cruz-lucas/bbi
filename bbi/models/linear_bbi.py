@@ -39,14 +39,14 @@ class LinearBBI(BBI):
         # For linear features: phi(s,a) = [s; a; 1] (bias)
         state_dim = 2 + num_prize_indicators
         action_dim = 2
-        self.feature_dim = state_dim + action_dim + 1
+        self.feature_dim = state_dim + action_dim + 1  # (bias)
         # We model each dimension of the next state and reward:
         # If next_state_dim = state_dim and we have 1 reward dimension,
         # total outputs = state_dim + 1
         # We store weights in a matrix W of shape (feature_dim, state_dim+1)
 
         # Initialize weights to zero
-        self.W = np.zeros((self.feature_dim, state_dim + 1))
+        self.W = np.zeros((self.feature_dim, state_dim + 1))  # "+ 1" = reward
         self.lr = learning_rate
         self.state_dim = state_dim
         self.residual_min = np.zeros(state_dim + 1)
@@ -64,9 +64,8 @@ class LinearBBI(BBI):
             np.ndarray: _description_
         """
         # For discrete actions, we can just append the action as a scalar
-        # or one-hot encode if multiple actions. Here we assume a scalar action.
-        # phi = [state; action; 1]
-        return np.concatenate([state, [action, 1.0]])
+        # phi = [state; action; 1] (bias)
+        return np.concatenate([state, [action, 1.0]])  # (feature_dim, 1)
 
     def predict(self, state: np.ndarray, action: int) -> Tuple[np.ndarray, float]:
         """Predict next state and reward given current state and action.
@@ -138,9 +137,9 @@ class LinearBBI(BBI):
         for a in action_bounds:
             next_state_pred, reward_pred = self.predict(state, a)
             # Construct bounding box by adding min and max residuals
-            # NOTE: This is a crude approximation. More nuanced bounding may be needed.
             lower_bound = (
-                np.concatenate([next_state_pred, [reward_pred]]) + self.residual_min
+                np.concatenate([next_state_pred, [reward_pred]])
+                + self.residual_min  # TODO: plus or minus?
             )
             upper_bound = (
                 np.concatenate([next_state_pred, [reward_pred]]) + self.residual_max

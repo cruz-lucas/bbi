@@ -10,9 +10,10 @@ import gymnasium as gym
 import numpy as np
 import wandb
 
-from bbi.agents import QLearningAgent, SelectivePlanningAgent, UnselectivePlanningAgent
+from bbi.agents.selector import select_agent_and_model
 from bbi.environments import ENV_CONFIGURATION
 from bbi.utils import load_config, parse_args
+from bbi.utils.dataclasses import State
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -28,12 +29,13 @@ def train_agent(seed: int, config: Dict[str, Any], return_dict: Dict[int, Any]) 
         return_dict (Dict[int, Any]): Shared dictionary to collect results across processes.
     """
     try:
-        # Extract configurations
+        agent_config: Dict[str, float] = config["agent"]
+        learning_rate = agent_config["learning_rate"]
+        discount = agent_config["discount"]
+        max_horizon = agent_config["max_horizon"]
+
         training_loops = config["training"]["training_loops"]
         n_steps = config["training"]["n_steps"]
-        learning_rate = config["agent"]["learning_rate"]
-        gamma = config["agent"]["gamma"]
-        max_horizon = config["agent"]["max_horizon"]
         verbose = config["verbose"]
         env_id = config["environment_id"]
         model_id = config["model_id"]
@@ -57,40 +59,19 @@ def train_agent(seed: int, config: Dict[str, Any], return_dict: Dict[int, Any]) 
         )
 
         # Initialize the environment and agent
-        env = gym.make(id=env_id)
+        env = gym.make(id=env_id, disable_env_checker=True)
 
-        if (
-            (model_id == "sampling")
-            or (model_id == "expected")
-            or (model_id == "perfect")
-        ):
-            agent = UnselectivePlanningAgent(
-                gamma=gamma,
-                action_space=env.action_space,
-                environment_length=env_config.get("env_length", 11),
-                intensities=env_config.get("status_intensities", [0, 5, 10]),
-                num_prize_indicators=env_config.get("num_prize_indicators", 2),
-                model_type=model_id,
-            )
+        agent, model = select_agent_and_model(
+            model_id=model_id,
+            discount=discount,
+            num_prize_indicators=env_config.get("num_prize_indicators", 2),
+            environment_length=env_config.get("env_length", 11),
+            number_intensities=len(env_config.get("status_intensities", [0, 5, 10])),
+            tau=agent_config.get("tau", None),
+        )
 
-        elif model_id == "bbi":
-            agent = SelectivePlanningAgent(
-                gamma=gamma,
-                action_space=env.action_space,
-                environment_length=env_config.get("env_length", 11),
-                intensities=env_config.get("status_intensities", [0, 5, 10]),
-                num_prize_indicators=env_config.get("num_prize_indicators", 2),
-                tau=config["agent"]["tau"],
-            )
-
-        else:
-            agent = QLearningAgent(
-                gamma=gamma,
-                action_space=env.action_space,
-                environment_length=env_config.get("env_length", 11),
-                intensities=env_config.get("status_intensities", [0, 5, 10]),
-                num_prize_indicators=env_config.get("num_prize_indicators", 2),
-            )
+        if model:
+            model.reset()
 
         logger.info(f"Starting training for seed {seed}")
 
@@ -101,17 +82,28 @@ def train_agent(seed: int, config: Dict[str, Any], return_dict: Dict[int, Any]) 
             # Training episode
             train_total_reward = 0.0
             td_errors = []
+
             for step in range(n_steps):
-                action = agent.get_action(obs, greedy=False)
+                action = agent.get_action(obs, epsilon=1.0)
                 next_obs, reward, terminated, truncated, info = env.step(action)
 
+                if model is not None:
+                    state: State = env.unwrapped.state
+                    model.state.set_state(
+                        position=state.position,
+                        current_status_indicator=state.current_status_indicator,
+                        previous_status_indicator=state.previous_status_indicator,
+                        prize_indicators=state.prize_indicators,
+                    )
+
                 td_error = agent.update_q_values(
-                    obs,
-                    action,
-                    reward,
-                    next_obs,
+                    obs=obs,
+                    action=action,
+                    reward=reward,
+                    next_obs=next_obs,
                     alpha=learning_rate,
                     max_horizon=max_horizon,
+                    model=model,
                     done=terminated or truncated,
                 )
 
@@ -126,17 +118,18 @@ def train_agent(seed: int, config: Dict[str, Any], return_dict: Dict[int, Any]) 
             obs, info = env.reset(seed=episode_seed + 1_000)
             discounted_return = 0.0
             eval_total_reward = 0.0
+
             for step in range(n_steps):
-                action = agent.get_action(obs, greedy=True)
+                action = agent.get_action(obs, epsilon=0.0)
                 next_obs, reward, terminated, truncated, info = env.step(action)
                 obs = next_obs
-                discounted_return += gamma**step * reward
+                discounted_return += discount**step * reward
                 eval_total_reward += reward
 
                 wandb.log(
                     {
                         "evaluation/discounted_return": discounted_return,
-                        "evaluation/discounted_reward": gamma**step * reward,
+                        "evaluation/discounted_reward": discount**step * reward,
                         "evaluation/reward": reward,
                         "eval_step": step + n_steps * training_step,
                     },

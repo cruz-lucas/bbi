@@ -1,13 +1,11 @@
 """Unselective Planning Agent"""
 
-from typing import List
+from typing import Dict, List, Tuple
 
-import gymnasium
 import numpy as np
 
 from bbi.agents import PlanningAgentBase
-from bbi.environments import GoRight
-from bbi.models import ExpectationModel, SamplingModel
+from bbi.environments import BaseEnv
 
 
 class UnselectivePlanningAgent(PlanningAgentBase):
@@ -19,56 +17,68 @@ class UnselectivePlanningAgent(PlanningAgentBase):
 
     def __init__(
         self,
-        action_space: gymnasium.Space,
-        gamma: float = 0.9,
-        environment_length: int = 11,
-        intensities: np.ndarray | List[int] = [0, 5, 10],
-        num_prize_indicators: int = 2,
+        number_actions: int = 2,
+        number_positions: int = 11,
+        number_intensities: int = 3,
+        number_prize_indicators: int = 2,
+        discount: float = 0.9,
         initial_value: float = 0.0,
-        model_type: str = "perfect",
     ):
-        """Initializes an unselective planning agent that equally weights each step in the multi-step return.
-
-        Args:
-            action_space (gymnasium.Space): Action space for the environment.
-            gamma (float): Discount factor.
-            environment_length (int): Size/length of the environment grid.
-            intensities (np.ndarray | List[int]): Possible status intensities.
-            num_prize_indicators (int): Number of prize indicator bits.
-            initial_value (float): Initial Q-value for all state-action pairs.
-            model_type (str): The type of dynamics model to use ('perfect', 'expected', or 'sampling').
-        """
         super().__init__(
-            action_space=action_space,
-            gamma=gamma,
-            environment_length=environment_length,
-            intensities=intensities,
-            num_prize_indicators=num_prize_indicators,
+            number_actions=number_actions,
+            number_positions=number_positions,
+            number_intensities=number_intensities,
+            number_prize_indicators=number_prize_indicators,
+            discount=discount,
             initial_value=initial_value,
         )
 
-        if model_type == "perfect":
-            self.dynamics_model = GoRight(
-                num_prize_indicators=num_prize_indicators,
-                env_length=environment_length,
-                has_state_offset=False,
+    def simulate_rollout(
+        self,
+        next_obs: Dict[str, float | int | np.ndarray],
+        reward: float,
+        max_horizon: int,
+        done: bool,
+        model: BaseEnv,
+    ) -> Tuple[List[float], List[float]]:
+        """Simulates a multi-step rollout using a learned or provided dynamics model.
+
+        Args:
+            state (np.ndarray): The initial state for the simulation.
+            action (int): The initial action taken.
+            reward (float): The immediate reward from the first step.
+            next_state (np.ndarray): The next state after the initial action.
+            max_horizon (int): The maximum number of lookahead steps.
+            done (bool): Indicates if the episode has ended.
+
+        Returns:
+            Tuple[List[float], List[float]]: A list of rewards and a list of max future Q-values for each simulated step.
+        """
+        rewards = [reward]
+        terminated = done
+        truncated = False
+
+        max_future_values = [self.get_max_future_q(next_obs, terminated or truncated)]
+
+        simulated_observation = next_obs
+
+        for h in range(1, max_horizon + 1):
+            if terminated or truncated:
+                break
+            action_h = self.get_action(simulated_observation, epsilon=0.0)  # greedy
+            next_simulated_obs, reward_h, terminated, truncated, _ = model.step(
+                action_h
             )
-        elif model_type == "expected":
-            self.dynamics_model = ExpectationModel(
-                num_prize_indicators=num_prize_indicators,
-                env_length=environment_length,
-                has_state_offset=False,
+
+            next_obs_rounded = self.round_obs(next_simulated_obs)
+
+            rewards.append(reward_h)
+            max_future_values.append(
+                self.get_max_future_q(next_obs_rounded, terminated or truncated)
             )
-        elif model_type == "sampling":
-            self.dynamics_model = SamplingModel(
-                num_prize_indicators=num_prize_indicators,
-                env_length=environment_length,
-                has_state_offset=False,
-            )
-        else:
-            raise ValueError(
-                'Please specify the type of model for unselective planning: "perfect", "expected", or "sampling".'
-            )
+            simulated_observation = next_simulated_obs
+
+        return rewards, max_future_values
 
     def compute_weights(self, td_targets: List[float], **kwargs) -> np.ndarray:
         """Assigns equal weights to each horizon step in the multi-step TD update.

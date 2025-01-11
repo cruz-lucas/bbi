@@ -1,5 +1,7 @@
 """Q-Learning Agent Implementation"""
 
+from typing import Dict
+
 import numpy as np
 
 from bbi.agents import BaseQAgent
@@ -10,10 +12,10 @@ class QLearningAgent(BaseQAgent):
 
     def update_q_values(
         self,
-        state: np.ndarray,
+        obs: Dict[str, float | int | np.ndarray],
         action: int,
         reward: float,
-        next_state: np.ndarray,
+        next_obs: Dict[str, float | int | np.ndarray],
         alpha: float,
         done: bool = False,
         **kwargs,
@@ -31,13 +33,27 @@ class QLearningAgent(BaseQAgent):
             model_id (str): Specifies the type of dynamics model to use.
             learning_rate (float): Learning rate for any learnable dynamics model.
         """
-        pos, intensity, prize = self.round_obs(state)
+        obs = self.round_obs(obs)
+        next_obs = self.round_obs(next_obs)
 
         # 1-step TD update:
-        max_future_q = self.get_max_future_q(next_state, done)
-        td_target = reward + self.gamma * max_future_q * (0.0 if done else 1.0)
-        td_error = td_target - self.q_values[pos, intensity, prize, action]
-        self.q_values[pos, intensity, prize, action] += alpha * td_error
+        max_future_q = self.get_max_future_q(next_obs, done)
+        td_target = reward + self.discount * max_future_q * (0.0 if done else 1.0)
+        td_error = (
+            td_target
+            - self.q_values[
+                obs["position"],
+                obs["status_indicator"],
+                obs["prize_indicators"],
+                action,
+            ]
+        )
+        self.q_values[
+            obs["position"],
+            obs["status_indicator"],
+            obs["prize_indicators"],
+            action,
+        ] += alpha * td_error
         self.td_error.append(td_error)
 
         return td_error
