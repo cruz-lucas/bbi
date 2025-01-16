@@ -11,13 +11,13 @@ from bbi.utils.constants import (
     TOP_AREA_HEIGHT,
 )
 
-# MODEL_CLASSES = [GoRight, SamplingModel, ExpectationModel, BBI]
 MODEL_CLASSES = [GoRight, SamplingModel, ExpectationModel, BBI]
 
 
 _screen = None
 _clock = None
 _font = None
+_strong_font = None
 _robot_img = None
 _lamp_on_img = None
 _lamp_off_img = None
@@ -63,15 +63,15 @@ SET_STATE_BUTTON = {
 }
 
 
-def _init_pygame(width: int, height: int, env_name: str = "Environment") -> None:
+def _init_pygame(width: int, height: int, env_name: str = "Environment", force: bool = False) -> None:
     """
     One-time initialization for Pygame. Sets up display, clock, font, images, etc.
     Stores references in module-level variables.
     """
-    global _screen, _clock, _font, _robot_img, _lamp_on_img, _lamp_off_img, _initialized
+    global _screen, _clock, _font, _strong_font, _robot_img, _lamp_on_img, _lamp_off_img, _initialized
 
     # Prevent re-initializing if already done
-    if _initialized:
+    if _initialized and not force:
         return
 
     pygame.init()
@@ -80,6 +80,7 @@ def _init_pygame(width: int, height: int, env_name: str = "Environment") -> None
     _screen = pygame.display.set_mode((width, height))
     _clock = pygame.time.Clock()
     _font = pygame.font.SysFont("Arial", 20)
+    _strong_font = pygame.font.SysFont("Arial", 24, bold=True)
 
     # Load images just once
     _robot_img = pygame.image.load(
@@ -265,14 +266,10 @@ def _draw_state_input_menu(env: GoRight, width: int, height: int):
     """
     Draws the text boxes and the "Set State" button at the bottom of the screen.
     """
-    # We place them at the bottom (just above the bottom margin).
-    # So the y coordinate is (height - BOTTOM_AREA_HEIGHT // 1.3),
-    # or some similar offset so we have them in one row.
-    base_y = int(height - BOTTOM_AREA_HEIGHT * 0.75)
+    base_y = height - BOTTOM_AREA_HEIGHT + 10  # Ensures alignment at the bottom
 
     # Draw each text box with a rectangle, placeholder or typed text
     for tb in TEXT_BOXES:
-        # Move the rect down to base_y
         tb["rect"].y = base_y
         color = (
             pygame.Color("lightskyblue3") if tb["active"] else pygame.Color("gray80")
@@ -305,6 +302,7 @@ def _draw_state_input_menu(env: GoRight, width: int, height: int):
             + (SET_STATE_BUTTON["rect"].height - btn_text_surf.get_height()) // 2,
         ),
     )
+
 
 
 def _handle_text_input_event(event):
@@ -406,6 +404,111 @@ def _apply_new_state(env: GoRight):
         )
 
 
+def _draw_bounding_boxes(env: BBI) -> None:
+    """
+    Draws bounding box information with extra space for the BBI environment.
+    """
+    bbox_y_start = 250
+    _margin = MARGIN
+
+    if env.bounding_box is not None:
+        state_min = env.bounding_box.state_lower_bound.get_state()
+        state_max = env.bounding_box.state_upper_bound.get_state()
+
+        mask = [True] * len(state_max)
+        mask[1] = False
+
+        previous_state = env.tracker.history[-1].state.get_state()
+
+        # Format numbers to 2 decimal places and align them
+        state_min_fmt = [f"{i:>6.2f}" for i in state_min[mask]]
+        state_max_fmt = [f"{i:>6.2f}" for i in state_max[mask]]
+        state_fmt = [f"{i:>6.2f}" for i in previous_state[mask]]
+
+        # Create strings with aligned numbers
+        state_min_str = f"State Lower Bound:    {' '.join(state_min_fmt)}"
+        state_max_str = f"State Upper Bound:   {' '.join(state_max_fmt)}"
+        state_str = f"t+1 State:                  {' '.join(state_fmt)}"
+
+        # Render the strings as text
+        min_text = _font.render(state_min_str, True, (0, 0, 0))
+        state_text = _font.render(state_str, True, (0, 0, 0))
+        max_text = _font.render(state_max_str, True, (0, 0, 0))
+        title = _strong_font.render("t+2 Bounding Box", True, (0, 0, 0))
+
+        interval = 30
+        # Display the text on the screen
+        _screen.blit(title, (_margin, bbox_y_start))
+        _screen.blit(max_text, (_margin, bbox_y_start + interval))
+        _screen.blit(state_text, (_margin, bbox_y_start + 2*interval))
+        _screen.blit(min_text, (_margin, bbox_y_start + 3*interval))
+
+        # Render and display the reward bounds
+        reward_min = env.bounding_box.reward_lower_bound
+        reward_max = env.bounding_box.reward_upper_bound
+        reward_str = f"Reward Bounds:     {reward_min:.2f}, {reward_max:.2f}"
+        reward_text = _font.render(reward_str, True, (0, 0, 0))
+        _screen.blit(reward_text, (_margin, bbox_y_start + 5*interval))  # Extra spacing
+
+
+
+
+
+        rolling_bb_min = env.rolling_bounding_box.state_lower_bound.get_state()
+        rolling_bb_max = env.rolling_bounding_box.state_upper_bound.get_state()
+
+        # Format numbers to 2 decimal places and align them
+        rolling_bb_min_fmt = [f"{i:>6.2f}" for i in rolling_bb_min[mask]]
+        rolling_bb_max_fmt = [f"{i:>6.2f}" for i in rolling_bb_max[mask]]
+
+        # Create strings with aligned numbers
+        rolling_bb_min_str = f"State Lower Bound:    {' '.join(rolling_bb_min_fmt)}"
+        rolling_bb_max_str = f"State Upper Bound:   {' '.join(rolling_bb_max_fmt)}"
+        # state_str = f"t+1     State:            {' '.join(state_fmt)}"
+        title = _strong_font.render("Rolling (t+h) Bounding Box", True, (0, 0, 0))
+
+        # Render the strings as text
+        min_text = _font.render(rolling_bb_min_str, True, (0, 0, 0))
+        max_text = _font.render(rolling_bb_max_str, True, (0, 0, 0))
+
+        # Display the text on the screen
+        _screen.blit(title, (_margin, bbox_y_start + 7*interval))
+        _screen.blit(max_text, (_margin, bbox_y_start + 8*interval))
+        _screen.blit(min_text, (_margin, bbox_y_start + 9*interval))
+
+
+        previous_bb = env.bbi_tracker.history[-2]
+        prev_bb_min = previous_bb.state_lower_bound.get_state()
+        prev_bb_max = previous_bb.state_upper_bound.get_state()
+
+        # Format numbers to 2 decimal places and align them
+        prev_bb_min_fmt = [f"{i:>6.2f}" for i in prev_bb_min[mask]]
+        prev_bb_max_fmt = [f"{i:>6.2f}" for i in prev_bb_max[mask]]
+
+        # Create strings with aligned numbers
+        prev_bb_min_str = f"State Lower Bound:    {' '.join(prev_bb_min_fmt)}"
+        prev_bb_max_str = f"State Upper Bound:   {' '.join(prev_bb_max_fmt)}"
+
+        prev_bb_min_text = _font.render(prev_bb_min_str, True, (0, 0, 0))
+        prev_bb_max_text = _font.render(prev_bb_max_str, True, (0, 0, 0))
+
+        title = _strong_font.render("t+h-1 Bounding Box", True, (0, 0, 0))
+
+        _screen.blit(title, (_margin, bbox_y_start + 11*interval))
+        _screen.blit(prev_bb_max_text, (_margin, bbox_y_start + 12*interval))
+        _screen.blit(prev_bb_min_text, (_margin, bbox_y_start + 13*interval))
+
+
+        # Render and display the reward bounds
+        reward_min = env.rolling_bounding_box.reward_lower_bound
+        reward_max = env.rolling_bounding_box.reward_upper_bound
+        reward_str = f"Reward Bounds:     {reward_min:.2f}, {reward_max:.2f}"
+        reward_text = _font.render(reward_str, True, (0, 0, 0))
+        _screen.blit(reward_text, (_margin, bbox_y_start + 15*interval))  # Extra spacing
+
+
+
+
 def render_env(env: GoRight, model_classes, current_model_index: int):
     """
     Main rendering function. Initializes Pygame if needed, draws the environment
@@ -415,11 +518,15 @@ def render_env(env: GoRight, model_classes, current_model_index: int):
     env_name = env.metadata.get("environment_name", "Environment")
 
     # Calculate required window size
+    base_height = TOP_AREA_HEIGHT + MARGIN + CELL_SIZE + BOTTOM_AREA_HEIGHT + 20
+    extra_height = 485 if env_name == "BBI" else 0  # Add extra height for bounding boxes
     width = MARGIN * 2 + CELL_SIZE * env.length
-    height = TOP_AREA_HEIGHT + MARGIN + CELL_SIZE + BOTTOM_AREA_HEIGHT
+    height = base_height + extra_height
 
     # Initialize Pygame and global references if not done
-    _init_pygame(width, height, env_name)
+    global _screen
+    if _screen is None or _screen.get_size() != (width, height):
+        _init_pygame(width, height, env_name, force=True)
 
     # Handle events
     for event in pygame.event.get():
@@ -436,6 +543,7 @@ def render_env(env: GoRight, model_classes, current_model_index: int):
                 env.step(0)  # Step left
             elif event.key == K_RIGHT:
                 env.step(1)  # Step right
+
             elif event.key == K_m:
                 # Cycle to the next model
                 current_model_index = (current_model_index + 1) % len(model_classes)
@@ -443,6 +551,7 @@ def render_env(env: GoRight, model_classes, current_model_index: int):
 
                 env_name = env.metadata.get("environment_name", "Environment")
                 pygame.display.set_caption(env_name)
+
                 env.reset()
             elif event.key == K_r:
                 # Reset the current environment
@@ -481,6 +590,9 @@ def render_env(env: GoRight, model_classes, current_model_index: int):
 
     # Draw text input boxes + "Set State" button
     _draw_state_input_menu(env, width, height)
+
+    if env_name == "BBI":
+        _draw_bounding_boxes(env)
 
     # Flip the display to show changes
     pygame.display.flip()

@@ -1,7 +1,7 @@
 """Module with expectation model."""
 
 from typing import Any, Dict, List, Optional, Tuple
-
+from copy import deepcopy
 import numpy as np
 
 from bbi.environments import GoRight
@@ -57,18 +57,8 @@ class ExpectationModel(GoRight):
 
         return self.state.get_observation(), {}
 
-    def step(self, action: int) -> Tuple[np.ndarray, float, bool, bool, Dict[str, Any]]:
-        """_summary_
 
-        Args:
-            action (int): _description_
-
-        Returns:
-            Tuple[np.ndarray, float, bool, bool, Dict[str, Any]]: _description_
-        """
-        return self._step(action)
-
-    def _step(
+    def step(
         self, action: int
     ) -> Tuple[np.ndarray, float, bool, bool, Dict[str, Any]]:
         """_summary_
@@ -82,17 +72,17 @@ class ExpectationModel(GoRight):
         if self.state is None:
             raise ValueError("State has not been initialized.")
 
-        current_state: State = self.state
+        current_state: State = deepcopy(self.state)
 
-        next_pos = self._compute_next_position(action, current_state)
-        next_status = 5
+        next_pos = self._compute_next_position(action)
+        next_status = self._compute_next_status()
         next_prize_indicators = self._compute_expected_next_prize_indicators(
-            next_pos, current_state
+            next_pos
         )
 
-        reward = self._compute_reward(next_prize_indicators, action, current_state)
+        reward = self._compute_reward(next_prize_indicators, action)
 
-        self.state = State(
+        self.state.set_state(
             position=next_pos,
             previous_status_indicator=current_state.current_status_indicator,
             current_status_indicator=next_status,
@@ -105,10 +95,12 @@ class ExpectationModel(GoRight):
 
         return self.state.get_observation(), reward, False, False, {}
 
+    def _compute_next_status(self):
+        return 5
+
     def _compute_expected_next_prize_indicators(
         self,
         next_position: float,
-        current_state: State,
     ) -> np.ndarray:
         """Computes the next prize indicators based on the current state.
 
@@ -121,11 +113,9 @@ class ExpectationModel(GoRight):
         Returns:
             np.ndarray: _description_
         """
-        position, _, _, *prize_indicators = current_state.get_state()
-
-        prize_indicators = np.array(prize_indicators)
+        prize_indicators = np.array(self.state.prize_indicators)
         if int(next_position) == self.length - 1:
-            if int(position) == self.length - 2:
+            if int(self.state.position) == self.length - 2:
                 return np.ones_like(prize_indicators, dtype=float) / 3.0
             elif all(prize_indicators == 1):
                 return prize_indicators

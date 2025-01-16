@@ -1,12 +1,12 @@
 """Selective Planning Agent"""
 
-from typing import List, Tuple
+from typing import List, Tuple, Dict
 
 import gymnasium
 import numpy as np
 
 from bbi.agents import PlanningAgentBase
-from bbi.models import BBI, LinearBBI, NeuralBBI, RegressionTreeBBI
+from bbi.models import BBI
 
 
 class SelectivePlanningAgent(PlanningAgentBase):
@@ -25,8 +25,6 @@ class SelectivePlanningAgent(PlanningAgentBase):
         num_prize_indicators: int = 2,
         initial_value: float = 0.0,
         tau: float = 1.0,
-        model_id: str = "bbi",
-        learning_rate: float = 1e-3,
     ):
         """Initializes a selective planning agent with multi-step lookahead and bounding-box logic.
 
@@ -49,45 +47,15 @@ class SelectivePlanningAgent(PlanningAgentBase):
             num_prize_indicators=num_prize_indicators,
             initial_value=initial_value,
         )
-
-        if model_id == "bbi":
-            self.dynamics_model = BBI(
-                num_prize_indicators=num_prize_indicators,
-                env_length=environment_length,
-                has_state_offset=False,
-            )
-        elif model_id == "bbi_linear":
-            self.dynamics_model = LinearBBI(
-                num_prize_indicators=num_prize_indicators,
-                env_length=environment_length,
-                has_state_offset=False,
-                learning_rate=learning_rate,
-            )
-        elif model_id == "bbi_tree":
-            self.dynamics_model = RegressionTreeBBI(
-                num_prize_indicators=num_prize_indicators,
-                env_length=environment_length,
-                has_state_offset=False,
-                # max_depth: int = 5,
-                # min_samples_split: int = 10
-            )
-        elif model_id == "bbi_neural":
-            self.dynamics_model = NeuralBBI(
-                num_prize_indicators=num_prize_indicators,
-                env_length=environment_length,
-                has_state_offset=False,
-                # hidden_units: int = 128,
-            )
         self.tau = tau
 
     def simulate_rollout(
         self,
-        state: np.ndarray,
-        action: int,
+        next_obs: Dict[str, float | int | np.ndarray],
         reward: float,
-        next_state: np.ndarray,
         max_horizon: int,
         done: bool,
+        model: BBI,
     ):
         """Extends the base rollout to track upper and lower reward/Q-value bounds for bounding-box inference.
 
@@ -103,54 +71,52 @@ class SelectivePlanningAgent(PlanningAgentBase):
             Tuple[List[float], List[float]]: The standard rollout's reward list and max future values.
         """
         rewards = [reward]
-        simulated_state = next_state.copy()
         terminated = done
         truncated = False
 
-        max_q = self.get_max_future_q(simulated_state, terminated or truncated)
-        max_future_values = [max_q]
+        max_future_values = [self.get_max_future_q(next_obs, terminated or truncated)]
 
-        self.set_model_state(state=simulated_state, previous_state=state)
+        simulated_observation = next_obs
 
         upper_rewards = [reward]
         lower_rewards = [reward]
 
-        upper_max_future_values = [max_q]
-        lower_max_future_values = [max_q]
+        upper_max_future_values = max_future_values.copy()
+        lower_max_future_values = max_future_values.copy()
 
         for _ in range(1, max_horizon):
             if terminated or truncated:
                 break
 
-            action_h = self.get_action(simulated_state, greedy=True)
-            next_simulated_state, reward_h, terminated, truncated, _ = (
-                self.dynamics_model.step(action_h)
+            action_h = self.get_action(simulated_observation, greedy=True)
+            next_simulated_obs, reward_h, terminated, truncated, _ = (
+                model.step(action_h)
             )
 
             done = terminated or truncated
 
             rewards.append(reward_h)
-            max_future_values.append(self.get_max_future_q(next_simulated_state, done))
+            max_future_values.append(self.get_max_future_q(next_simulated_obs, done))
 
             # Bounding box rewards
-            self.dynamics_model.get_next_bounds(simulated_state)
-            upper_rewards.append(np.max(self.dynamics_model.reward_bounding_box))
-            lower_rewards.append(np.min(self.dynamics_model.reward_bounding_box))
+            # model.get_next_bounds(simulated_observation)
+            upper_rewards.append(np.max(model.reward_bounding_box))
+            lower_rewards.append(np.min(model.reward_bounding_box))
 
             # define action bound to select action for bounds
             upper_q_value_bounds = [
                 self.get_max_future_q(state_bound, done)
-                for state_bound in self.dynamics_model.state_bounding_box
+                for state_bound in model.state_bounding_box
             ]
             lower_q_value_bounds = [
                 self.get_min_future_q(state_bound, done)
-                for state_bound in self.dynamics_model.state_bounding_box
+                for state_bound in model.state_bounding_box
             ]
 
             upper_max_future_values.append(np.max(upper_q_value_bounds))
             lower_max_future_values.append(np.min(lower_q_value_bounds))
 
-            simulated_state = next_simulated_state.copy()
+            simulated_observation = next_simulated_obs.copy()
 
         # Store bounding box data for later weighting
         self._upper_rewards = upper_rewards
@@ -174,9 +140,13 @@ class SelectivePlanningAgent(PlanningAgentBase):
         )
         # Negative uncertainties = lower - upper
         neg_uncertainties = lower_td_targets - upper_td_targets
-        return self._calculate_weigths(
+        weights = self._calculate_weigths(
             neg_uncertainties=neg_uncertainties, tau=self.tau
         )
+
+        assert np.isclose(np.sum(weights), 1.0, atol=1e-5)
+        return weights
+
 
     def _compute_bounding_box_td_targets(
         self, td_targets: List[float]
@@ -196,18 +166,18 @@ class SelectivePlanningAgent(PlanningAgentBase):
 
         for h in range(len(td_targets)):
             # Upper
-            upper_cumulative_reward += (self.gamma**h) * self._upper_rewards[h]
+            upper_cumulative_reward += (self.discount**h) * self._upper_rewards[h]
             upper_td_target = (
                 upper_cumulative_reward
-                + (self.gamma ** (h + 1)) * self._upper_max_future_values[h]
+                + (self.discount ** (h + 1)) * self._upper_max_future_values[h]
             )
             upper_td_targets.append(upper_td_target)
 
             # Lower
-            lower_cumulative_reward += (self.gamma**h) * self._lower_rewards[h]
+            lower_cumulative_reward += (self.discount**h) * self._lower_rewards[h]
             lower_td_target = (
                 lower_cumulative_reward
-                + (self.gamma ** (h + 1)) * self._lower_max_future_values[h]
+                + (self.discount ** (h + 1)) * self._lower_max_future_values[h]
             )
             lower_td_targets.append(lower_td_target)
 

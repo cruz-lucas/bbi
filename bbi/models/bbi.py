@@ -1,10 +1,11 @@
 """Module with BBI model."""
 
 from typing import List, Optional, Tuple
-
+from copy import deepcopy
 import numpy as np
 
 from .expectation import ExpectationModel
+from bbi.utils.dataclasses import State, BoundingBox, Action, BBITracker
 
 
 class BBI(ExpectationModel):
@@ -18,7 +19,6 @@ class BBI(ExpectationModel):
         num_prize_indicators: int = 2,
         env_length: int = 11,
         status_intensities: List[int] = [0, 5, 10],
-        has_state_offset: bool = False,
         seed: Optional[int] = None,
         render_mode: Optional[str] = "human",
     ) -> None:
@@ -35,17 +35,11 @@ class BBI(ExpectationModel):
             num_prize_indicators=num_prize_indicators,
             env_length=env_length,
             status_intensities=status_intensities,
-            has_state_offset=False,
             seed=seed,
         )
-        self.state_bounding_box = None
-        self.reward_bounding_box = None
-
-        self.LOWER_BOUND = 0
-        self.UPPER_BOUND = 1
-
-        # rendering related
-        self.bottom_area_height = 150
+        self.bounding_box: BoundingBox | None = None
+        self.rolling_bounding_box: BoundingBox | None = None
+        self.bbi_tracker: BBITracker | None = None
 
     def reset(self, seed=None, options=None):
         """_summary_
@@ -57,13 +51,43 @@ class BBI(ExpectationModel):
         Returns:
             _type_: _description_
         """
-        self.state_bounding_box = None
-        self.reward_bounding_box = None
-        return super().reset(seed, options)
+        obs, info = super().reset(seed, options)
+        self.bounding_box = None
+        self.rolling_bounding_box = None
+        self.bbi_tracker = BBITracker()
+
+        current_state_bb = BoundingBox(
+                state_lower_bound=self.state,
+                state_upper_bound=self.state,
+                reward_lower_bound=np.nan,
+                reward_upper_bound=np.nan
+            )
+        self.bbi_tracker.record(deepcopy(current_state_bb))
+
+        return obs, info
+    
+    def step(self, action):
+        current_state_bb = BoundingBox(
+                state_lower_bound=self.state,
+                state_upper_bound=self.state,
+                reward_lower_bound=np.nan,
+                reward_upper_bound=np.nan
+            )
+        
+        self.bounding_box = self.get_next_bounds(current_state_bb)
+
+        if self.rolling_bounding_box is None:
+            self.rolling_bounding_box = self.get_next_bounds(current_state_bb)
+        else:
+            self.rolling_bounding_box = self.get_next_bounds(self.rolling_bounding_box)
+
+        self.bbi_tracker.record(deepcopy(self.rolling_bounding_box))
+
+        return super().step(action)
 
     def get_next_bounds(
-        self, state: np.ndarray, action_bounds: np.ndarray | List[int] = [0, 1]
-    ) -> Tuple[np.ndarray, np.ndarray]:
+        self, bounding_box: BoundingBox, action_bounds: np.ndarray | List[int] = [0, 1]
+    ) -> BoundingBox:
         """_summary_
 
         Args:
@@ -73,56 +97,59 @@ class BBI(ExpectationModel):
         Returns:
             Tuple[np.ndarray, np.ndarray]: _description_
         """
-        position, current_status, *prize_indicators = state
-        prize_indicators = np.array(prize_indicators)
-        if self.state_bounding_box is None:
-            previous_prize_indicators_list = [prize_indicators]
+        previous_prize_indicators_list = [
+            bounding_box.state_lower_bound.prize_indicators,
+            bounding_box.state_upper_bound.prize_indicators
+        ]
 
-        else:
-            previous_prize_indicators_list = [
-                self.state_bounding_box[0, 2:],
-                self.state_bounding_box[1, 2:],
-            ]
+        previous_pos = [
+            bounding_box.state_lower_bound.position,
+            bounding_box.state_upper_bound.position
+        ]
 
-        status_bounds = [np.min(self.intensities), np.max(self.intensities)]
+        status_bounds = [np.min(self.intensities), np.max(self.intensities)] # the bounds will always be 0 and 10
+
         next_positions = []
         prize_indicators_list = []
 
         for action in action_bounds:
-            next_pos = self._compute_next_position(action=action, position=position)
-            next_positions.append(next_pos)
+            for pos in previous_pos:
+                next_pos = self._compute_next_position(action=action, position=pos)
+                next_positions.append(next_pos)
 
-            for status in status_bounds:
-                for prize_ind in previous_prize_indicators_list:
-                    prize_indicators_list.append(
-                        self._compute_next_prize_indicators(
-                            next_pos, position, status, prize_ind
+                for status in status_bounds:
+                    for prize_ind in previous_prize_indicators_list:
+                        prize_indicators_list.append(
+                            self._compute_next_prize_indicators(
+                                next_pos, next_status=status, prize_indicators=prize_ind
+                            )
                         )
-                    )
 
-        prize_indicators_bounds = [
-            np.min(prize_indicators_list, axis=0),
-            np.max(prize_indicators_list, axis=0),
-        ]
-        next_pos_bounds = [np.min(next_positions), np.max(next_positions)]
+        lower_bound: State = State(
+            position=np.min(next_positions),
+            previous_status_indicator=np.min(self.intensities),
+            current_status_indicator=np.min(self.intensities),
+            prize_indicators=np.min(prize_indicators_list, axis=0)
+        )
 
-        state_bounds = np.zeros((2, 2 + self.num_prize_indicators))
-        state_bounds[self.LOWER_BOUND, 0] = next_pos_bounds[self.LOWER_BOUND]
-        state_bounds[self.LOWER_BOUND, 1] = status_bounds[self.LOWER_BOUND]
+        upper_bound: State = State(
+            position=np.max(next_positions),
+            previous_status_indicator=np.max(self.intensities),
+            current_status_indicator=np.max(self.intensities),
+            prize_indicators=np.max(prize_indicators_list, axis=0)
+        )
 
-        state_bounds[self.UPPER_BOUND, 0] = next_pos_bounds[self.UPPER_BOUND]
-        state_bounds[self.UPPER_BOUND, 1] = status_bounds[self.UPPER_BOUND]
+        reward_bounds = []
+        for action in action_bounds:
+            for indicator in [lower_bound.prize_indicators, upper_bound.prize_indicators]:
+                reward_bounds.append(self._compute_reward(indicator, action))
 
-        for i in range(self.num_prize_indicators):
-            p_min = prize_indicators_bounds[self.LOWER_BOUND][i]
-            p_max = prize_indicators_bounds[self.UPPER_BOUND][i]
-            state_bounds[self.LOWER_BOUND, 2 + i] = p_min
-            state_bounds[self.UPPER_BOUND, 2 + i] = p_max
 
-        self.state_bounding_box = state_bounds
-        self.reward_bounding_box = [
-            self._compute_reward(prize_indicators_bounds[0], action, position),
-            self._compute_reward(prize_indicators_bounds[1], action, position),
-        ]
+        bounding_box = BoundingBox(
+            state_lower_bound=lower_bound,
+            state_upper_bound=upper_bound,
+            reward_lower_bound=np.min(reward_bounds),
+            reward_upper_bound=np.max(reward_bounds)
+        )
 
-        return self.state_bounding_box, self.reward_bounding_box
+        return bounding_box

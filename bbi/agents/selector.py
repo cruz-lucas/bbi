@@ -36,7 +36,6 @@ def select_agent_and_model(
         model = ExpectationModel(
             num_prize_indicators=num_prize_indicators,
             env_length=environment_length,
-            has_state_offset=False,
         )
 
         agent = UnselectivePlanningAgent(
@@ -50,7 +49,6 @@ def select_agent_and_model(
         model = SamplingModel(
             num_prize_indicators=num_prize_indicators,
             env_length=environment_length,
-            has_state_offset=False,
         )
 
         agent = UnselectivePlanningAgent(
@@ -64,7 +62,6 @@ def select_agent_and_model(
         model = ExpectationModel(
             num_prize_indicators=num_prize_indicators,
             env_length=environment_length,
-            has_state_offset=False,
         )
 
         agent = SelectivePlanningAgent(

@@ -1,7 +1,7 @@
 """Module with sampling model."""
 
 from typing import Any, Dict, List, Optional, Tuple
-
+from copy import deepcopy
 import numpy as np
 
 from bbi.environments import GoRight
@@ -67,15 +67,15 @@ class SamplingModel(GoRight):
         if self.state is None:
             raise ValueError("State has not been initialized.")
 
-        current_state: State = self.state
+        current_state: State = deepcopy(self.state)
 
-        next_pos = self._compute_next_position(action, current_state)
+        next_pos = self._compute_next_position(action)
         next_status = np.random.choice(self.intensities)
         next_prize_indicators = self._compute_next_prize_indicators(
-            next_pos, next_status, current_state
+            next_pos
         )
 
-        reward = self._compute_reward(next_prize_indicators, action, current_state)
+        reward = self._compute_reward(next_prize_indicators, action)
 
         self.state.set_state(
             position=next_pos,
@@ -91,7 +91,7 @@ class SamplingModel(GoRight):
         return self.state.get_observation(), reward, False, False, {}
 
     def _compute_next_prize_indicators(
-        self, next_position: float, position: float, current_state: State
+        self, next_position: float
     ) -> np.ndarray:
         """Computes the next prize indicators based on the current state.
 
@@ -104,16 +104,13 @@ class SamplingModel(GoRight):
         Returns:
             np.ndarray: _description_
         """
-        position, _, _, *prize_indicators = current_state.get_state()
-
-        prize_indicators = np.array(prize_indicators)
         if int(next_position) == self.length - 1:
-            if int(position) == self.length - 2:
+            if int(self.state.position) == self.length - 2:
                 return np.random.choice(
                     [0, 1], size=self.num_prize_indicators, p=[2 / 3, 1 / 3]
                 )
-            elif all(prize_indicators == 1):
-                return prize_indicators
+            elif all(self.state.prize_indicators == 1):
+                return self.state.prize_indicators
             else:
-                return self._shift_prize_indicators(prize_indicators)
+                return self._shift_prize_indicators(self.state.prize_indicators)
         return np.zeros(self.num_prize_indicators, dtype=int)

@@ -1,7 +1,7 @@
 """_summary_"""
 
 from typing import Any, Dict, List, Optional, Tuple
-
+from copy import deepcopy
 import gymnasium as gym
 import numpy as np
 from gymnasium import spaces
@@ -72,6 +72,7 @@ class GoRight(BaseEnv):
         )
 
         self.state: Optional[State] = None
+        self.tracker: Tracker = Tracker()
 
         self.seed(seed)
 
@@ -135,9 +136,9 @@ class GoRight(BaseEnv):
         if self.state is None:
             raise ValueError("State has not been initialized.")
 
-        current_state: State = self.state
+        current_state: State = deepcopy(self.state)
 
-        next_pos = self._compute_next_position(action, current_state)
+        next_pos = self._compute_next_position(action)
         next_status = STATUS_TRANSITION.get(
             (
                 current_state.previous_status_indicator,
@@ -147,10 +148,10 @@ class GoRight(BaseEnv):
         )
 
         next_prize_indicators = self._compute_next_prize_indicators(
-            next_pos, next_status, current_state
+            next_pos, next_status
         )
 
-        reward = self._compute_reward(next_prize_indicators, action, current_state)
+        reward = self._compute_reward(next_prize_indicators, action)
 
         self.state.set_state(
             position=next_pos,
@@ -165,7 +166,7 @@ class GoRight(BaseEnv):
 
         return self.state.get_observation(), reward, False, False, {}
 
-    def _compute_next_position(self, action: int, state: State) -> int:
+    def _compute_next_position(self, action: int, position: int | None = None,) -> int:
         """Calculates the next position based on the current position and action.
 
         Args:
@@ -175,14 +176,16 @@ class GoRight(BaseEnv):
         Returns:
             int: The next position
         """
+        position = self.state.position if position is None else position
         direction = 1 if action > 0 else -1
-        return np.clip(state.position + direction, 0, self.length - 1)
+        return np.clip(position + direction, 0, self.length - 1)
 
     def _compute_next_prize_indicators(
         self,
         next_position: float,
         next_status: int,
-        current_state: State,
+        prize_indicators: np.ndarray | None = None,
+        position: int | None = None,
     ) -> np.ndarray:
         """Computes the next prize indicators based on the current state.
 
@@ -194,11 +197,11 @@ class GoRight(BaseEnv):
         Returns:
             np.ndarray: An updated array of prize indicators.
         """
-        position, _, _, *prize_indicators = current_state.get_state()
+        prize_indicators = np.array(self.state.prize_indicators) if prize_indicators is None else np.array(prize_indicators)
+        pos = self.state.position if position is None else position
 
-        prize_indicators = np.array(prize_indicators)
         if int(next_position) == self.length - 1:
-            if int(position) == self.length - 2:
+            if int(pos) == self.length - 2:
                 if next_status == self.max_intensity:
                     return np.ones_like(prize_indicators, dtype=int)
             elif all(prize_indicators == 1):
@@ -227,7 +230,7 @@ class GoRight(BaseEnv):
         return prize_indicators
 
     def _compute_reward(
-        self, next_prize_indicators: np.ndarray, action: int, state: State
+        self, next_prize_indicators: np.ndarray, action: int
     ) -> float:
         """Compute the reward based on action and prize indicators.
 
@@ -239,6 +242,6 @@ class GoRight(BaseEnv):
         Returns:
             float: Calculated reward.
         """
-        if all(next_prize_indicators == 1) and int(state.position) == self.length - 1:
+        if all(next_prize_indicators == 1) and int(self.state.position) == self.length - 1:
             return 3.0
         return 0.0 if action == Action.left else -1.0

@@ -58,6 +58,7 @@ class UnselectivePlanningAgent(PlanningAgentBase):
         terminated = done
         truncated = False
 
+        # the name of the method is a bit weird. but it get max_a q(s', a)
         max_future_values = [self.get_max_future_q(next_obs, terminated or truncated)]
 
         simulated_observation = next_obs
@@ -89,4 +90,6 @@ class UnselectivePlanningAgent(PlanningAgentBase):
         Returns:
             np.ndarray: An array of equal weights, summing to 1.
         """
-        return np.ones(len(td_targets)) / len(td_targets)
+        weights = np.ones(len(td_targets)) / len(td_targets)
+        assert np.isclose(np.sum(weights), 1.0, atol=1e-5)
+        return weights

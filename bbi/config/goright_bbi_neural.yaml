@@ -6,7 +6,7 @@ training:
 
 agent:
   learning_rate: 0.1          # Learning rate for Q-learning updates
-  gamma: 0.9                  # Discount factor (gamma)
+  discount: 0.9                  # Discount factor (gamma)
   max_horizon: 5              # Length of rollout for MBVE
   tau: 0.1
 

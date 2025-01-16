@@ -142,3 +142,22 @@ class Tracker:
 
         self.total_reward += reward
         self.action_count += 1
+
+
+@dataclass
+class BoundingBox:
+    state_upper_bound: State
+    state_lower_bound: State
+    reward_upper_bound: int
+    reward_lower_bound: int
+
+
+@dataclass
+class BBITracker:
+    history: List[BoundingBox] | None = None
+
+    def record(self, bounding_box: BoundingBox) -> None:
+        if self.history is None:
+            self.history = [bounding_box]
+        else:
+            self.history.append(bounding_box)

@@ -58,6 +58,20 @@ class PlanningAgentBase(BaseQAgent):
             Tuple[List[float], List[float]]: A list of rewards and a list of max future Q-values for each simulated step.
         """
         raise NotImplementedError("This method should be implemented by subclasses.")
+    
+    def compute_weights(self, td_targets: List[float], **kwargs) -> np.ndarray:
+        """Calculates how each TD target should be weighted in the multi-step update.
+
+        Args:
+            td_targets (List[float]): The list of computed TD targets.
+
+        Raises:
+            NotImplementedError: Must be overridden to provide weighting logic.
+
+        Returns:
+            np.ndarray: An array of weights corresponding to each TD target.
+        """
+        raise NotImplementedError
 
     def compute_td_targets(
         self,
@@ -82,20 +96,6 @@ class PlanningAgentBase(BaseQAgent):
             )
             td_targets.append(td_target)
         return td_targets
-
-    def compute_weights(self, td_targets: List[float], **kwargs) -> np.ndarray:
-        """Calculates how each TD target should be weighted in the multi-step update.
-
-        Args:
-            td_targets (List[float]): The list of computed TD targets.
-
-        Raises:
-            NotImplementedError: Must be overridden to provide weighting logic.
-
-        Returns:
-            np.ndarray: An array of weights corresponding to each TD target.
-        """
-        raise NotImplementedError
 
     def update_q_values(
         self,
@@ -136,7 +136,7 @@ class PlanningAgentBase(BaseQAgent):
 
         td_targets = self.compute_td_targets(rewards, max_future_values)
         weights = self.compute_weights(td_targets, **kwargs)
-        weighted_td_target = np.dot(weights, td_targets)
+        weighted_td_target = np.dot(weights, td_targets) # the division by the sum of weights is useless since the weights sum to 1
 
         td_error = (
             weighted_td_target
