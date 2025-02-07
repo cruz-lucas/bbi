@@ -1,30 +1,30 @@
 """Module with sampling model."""
 
+from itertools import product
 from typing import Any, Dict, List, Optional, Tuple
-from copy import deepcopy
+
 import numpy as np
 
-from bbi.environments import GoRight
-from bbi.utils.dataclasses import State
+from bbi.models.model_base import ModelBase, ObsType
 
 
-class SamplingModel(GoRight):
-    metadata = {"render_modes": ["human"], "environment_name": "Sampling Model"}
-
+class ExpectationModel(ModelBase):
     def __init__(
         self,
         num_prize_indicators: int = 2,
         env_length: int = 11,
         status_intensities: List[int] = [0, 5, 10],
         seed: Optional[int] = None,
+        render_mode: Optional[str] = None,
     ) -> None:
-        """_summary_
+        """Initializes the GoRight environment.
 
         Args:
-            num_prize_indicators (int, optional): _description_. Defaults to 2.
-            env_length (int, optional): _description_. Defaults to 11.
-            status_intensities (List[int], optional): _description_. Defaults to [0, 5, 10].
-            seed (Optional[int], optional): _description_. Defaults to None.
+            num_prize_indicators (int): Number of prize indicators.
+            env_length (int): Length of the grid.
+            status_intensities (List[int]): Possible status intensities.
+            has_state_offset (bool): Whether to add noise to observations.
+            seed (Optional[int]): Seed for reproducibility.
         """
         super().__init__(
             num_prize_indicators=num_prize_indicators,
@@ -32,6 +32,7 @@ class SamplingModel(GoRight):
             status_intensities=status_intensities,
             has_state_offset=False,
             seed=seed,
+            render_mode=render_mode,
         )
 
     def reset(
@@ -39,60 +40,30 @@ class SamplingModel(GoRight):
         seed: Optional[int] = None,
         options: Optional[Dict[str, Any]] = None,
     ) -> Tuple[np.ndarray, Dict[str, Any]]:
-        """_summary_
+        """Resets the environment to its initial state.
 
         Args:
-            seed (Optional[int], optional): _description_. Defaults to None.
-            options (Optional[Dict[str, Any]], optional): _description_. Defaults to None.
+            seed (Optional[int]): Seed for reproducibility.
+            options (Optional[Dict[str, Any]]): Additional options.
 
         Returns:
-            Tuple[np.ndarray, Dict[str, Any]]: _description_
+            Tuple[np.ndarray, Dict[str, Any]]: Initial observation and info dictionary.
         """
-        super().reset(seed=seed)
+        obs, info = super().reset(seed=seed)
 
-        if self.state is None:
-            raise ValueError("State has not been initialized.")
+        self.state.current_status_indicator = self._compute_next_status()
 
-        return self.state.get_observation(), {}
+        return obs, info
 
-    def step(self, action: int) -> Tuple[np.ndarray, float, bool, bool, Dict[str, Any]]:
-        """_summary_
-
-        Args:
-            action (int): _description_
+    def _compute_next_status(self, **kwargs) -> int:
+        """Returns the expected next status.
 
         Returns:
-            Tuple[np.ndarray, float, bool, bool, Dict[str, Any]]: _description_
+            int: Expected ned status.
         """
-        if self.state is None:
-            raise ValueError("State has not been initialized.")
+        return np.random.choice(self.status_intensities)
 
-        current_state: State = deepcopy(self.state)
-
-        next_pos = self._compute_next_position(action)
-        next_status = np.random.choice(self.intensities)
-        next_prize_indicators = self._compute_next_prize_indicators(
-            next_pos
-        )
-
-        reward = self._compute_reward(next_prize_indicators, action)
-
-        self.state.set_state(
-            position=next_pos,
-            previous_status_indicator=current_state.current_status_indicator,
-            current_status_indicator=next_status,
-            prize_indicators=next_prize_indicators,
-        )
-
-        self.tracker.record(
-            state=current_state, action=action, reward=reward, next_state=self.state
-        )
-
-        return self.state.get_observation(), reward, False, False, {}
-
-    def _compute_next_prize_indicators(
-        self, next_position: float
-    ) -> np.ndarray:
+    def _compute_next_prize_indicators(self, next_position: float) -> np.ndarray:
         """Computes the next prize indicators based on the current state.
 
         Args:
@@ -114,3 +85,111 @@ class SamplingModel(GoRight):
             else:
                 return self._shift_prize_indicators(self.state.prize_indicators)
         return np.zeros(self.num_prize_indicators, dtype=int)
+
+    def predict(
+        self,
+        obs: Tuple[int, ...],
+        action: int,
+        state_bb: Tuple[Tuple[int, ...], Tuple[int, ...]] | None = None,
+        action_bb: Tuple[int, int] | None = None,
+    ) -> Tuple[ObsType, np.float32, ObsType, np.float32, ObsType, np.float32]:
+        """Predict the next state and reward given an observation and action, and also compute lower and upper bounds by using the minimum and maximum status intensities, respectively.
+
+        This method sets the environment’s state based on the observation,
+        calls step() to simulate the transition, then repeats the process with the
+        status indicator forced to its minimum and maximum values. The environment’s
+        internal state is restored at the end.
+
+        Args:
+            obs: A dictionary with keys 'position', 'status_indicator', and 'prize_indicators'
+                representing the current observation.
+            action: The action to be executed (e.g. 0 for LEFT, 1 for RIGHT).
+
+        Returns:
+            A tuple containing:
+            - expected_obs: Expected next observation.
+            - expected_reward: Expected reward.
+            - lower_obs: Next observation when the status is forced to the minimum.
+            - lower_reward: Reward for the lower bound.
+            - upper_obs: Next observation when the status is forced to the maximum.
+            - upper_reward: Reward for the upper bound.
+        """
+        pos = obs[0]  # round(obs["position"][0])
+        status = obs[1]  # round(obs["status_indicator"][0])
+        prize = np.array(obs[2:])  # np.array(obs["prize_indicators"])
+
+        if status == 1:
+            status = 5
+        elif status == 2:
+            status = 10
+
+        self.state.set_state(
+            position=pos,
+            current_status_indicator=status,
+            prize_indicators=np.array(prize),
+        )
+
+        self._compute_next_status = lambda *args, **kwargs: np.random.choice(
+            self.status_intensities
+        )
+        _, exp_reward, _, _, _ = self.step(action)
+        exp_obs = self.state.get_state()[self.state.mask]
+
+        if state_bb is not None:
+            state_ranges = [
+                range(state_bb[0][i], state_bb[1][i] + 1)
+                for i in range(len(state_bb[0]))
+            ]
+            action_range = range(action_bb[0], action_bb[1] + 1)
+
+            state_candidates = []
+            reward_candidates = []
+            for s in product(*state_ranges):
+                for a in action_range:
+                    self.state.set_state(
+                        position=pos,
+                        current_status_indicator=status,
+                        prize_indicators=np.array(prize),
+                    )
+
+                    self._compute_next_status = lambda *args, **kwargs: 0
+                    _, lower_reward, _, _, _ = self.step(action)
+                    state_candidates.append(self.state.get_state()[self.state.mask])
+                    reward_candidates.append(lower_reward)
+
+                    self.state.set_state(
+                        position=pos,
+                        current_status_indicator=status,
+                        prize_indicators=np.array(prize),
+                    )
+
+                    self._compute_next_status = lambda *args, **kwargs: 10
+                    _, upper_reward, _, _, _ = self.step(action)
+                    state_candidates.append(self.state.get_state()[self.state.mask])
+                    reward_candidates.append(upper_reward)
+
+            lower_reward = np.min(reward_candidates)
+            upper_reward = np.max(reward_candidates)
+
+            lower_obs = np.min(state_candidates, axis=0)
+            upper_obs = np.max(state_candidates, axis=0)
+            lower_obs[1] = np.argwhere(self.status_intensities == lower_obs[1])
+            upper_obs[1] = np.argwhere(self.status_intensities == upper_obs[1])
+            exp_obs[1] = np.argwhere(self.status_intensities == exp_obs[1])
+
+            self._compute_next_status = lambda *args, **kwargs: np.random.choice(
+                self.status_intensities
+            )
+            return (
+                tuple(exp_obs),
+                exp_reward,
+                tuple(lower_obs),
+                lower_reward,
+                tuple(upper_obs),
+                upper_reward,
+            )
+
+        return (exp_obs, exp_reward)
+
+    def update(self, **kwargs) -> None:
+        return None

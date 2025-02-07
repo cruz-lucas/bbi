@@ -23,37 +23,37 @@ run:
 		$(IMAGE_NAME)
 
 test:
-	python train.py --verbose=600
+	python train.py
 
 q-learning:
-	python train.py --verbose=600 --config="bbi/config/goright_q_learning.yaml"
+	python train.py --config_file="goright_qlearning"
 
 perfect:
-	python train.py --verbose=600 --config="bbi/config/goright_perfect.yaml"
+	python train.py --config_file="goright_perfect"
 
 expect-2:
-	python train.py --verbose=600 --config="bbi/config/goright_expected_h2.yaml"
+	python train.py --config_file="goright_expected_h2"
 
 expect-5:
-	python train.py --verbose=600 --config="bbi/config/goright_expected_h5.yaml"
+	python train.py --config_file="goright_expected_h5"
 
 sampling-2:
-	python train.py --verbose=600 --config="bbi/config/goright_sampling_h2.yaml"
+	python train.py --config_file="goright_sampling_h2"
 
 sampling-5:
-	python train.py --verbose=600 --config="bbi/config/goright_sampling_h5.yaml"
+	python train.py --config_file="goright_sampling_h5"
 
 bounding-box:
-	python train.py --verbose=600 --config="bbi/config/goright_bbi.yaml"
+	python train.py --config_file="goright_bbi"
 
 linear-bbi:
-	python train.py --verbose=600 --config="bbi/config/goright_bbi_linear.yaml"
+	python train.py --config_file="goright_bbi_linear"
 
 tree-bbi:
-	python train.py --verbose=600 --config="bbi/config/goright_bbi_tree.yaml"
+	python train.py --config_file="goright_bbi_tree"
 
 neural-bbi:
-	python train.py --verbose=600 --config="bbi/config/goright_bbi_neural.yaml"
+	python train.py --config_file="goright_bbi_neural"
 
 # Clean up by removing the Docker image
 clean:

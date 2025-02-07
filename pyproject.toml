@@ -24,6 +24,9 @@ dependencies = [
     "torch>=2.5.1",
     "pyarrow>=18.1.0",
     "pre-commit>=4.0.1",
+    "goright[extra]",
+    "agents",
+    "gin-config>=0.5.0",
 ]
 
 [project.urls]
@@ -33,6 +36,8 @@ Repository = "https://github.com/me/spam.git"
 
 [tool.uv.sources]
 bbi = { workspace = true }
+agents = { git = "https://github.com/cruz-lucas/minimal_agents.git" }
+goright = { git = "https://github.com/cruz-lucas/goright.git" }
 
 [tool.setuptools]
 packages = ["bbi"]

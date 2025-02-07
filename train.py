@@ -1,26 +1,41 @@
 """Training script."""
 
+import argparse
 import logging
 import os
 import traceback
-from multiprocessing import Manager, Process
-from typing import Any, Dict
+from typing import List, Tuple
 
+import gin
 import gymnasium as gym
 import numpy as np
 import wandb
 
-from bbi.agents.selector import select_agent_and_model
-from bbi.environments import ENV_CONFIGURATION
-from bbi.utils import load_config, parse_args
-from bbi.utils.dataclasses import State
+from bbi.agent import BoundingBoxPlanningAgent
+from bbi.models import ExpectationModel
 
-# Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
-def train_agent(seed: int, config: Dict[str, Any], return_dict: Dict[int, Any]) -> None:
+@gin.configurable
+def train_agent(
+    seed: int,
+    training_loops: int = 600,
+    n_steps: int = 500,
+    step_size: float = 0.1,
+    initial_value: float = 0.0,
+    discount: float = 0.9,
+    max_horizon: int = 5,
+    tau: float = 1.0,
+    environment_id: str = "GoRight-v0",
+    obs_shape: Tuple[int, int, int, int] = (11, 3, 2, 2),
+    status_intensities: List[int] = [0, 5, 10],
+    model_type: str = "expectation",
+    project: str = "BBI",
+    notes: str = "",
+    group_name: str = "",
+) -> None:
     """Trains a Q-Learning agent using the provided seed and configuration.
 
     Args:
@@ -29,45 +44,47 @@ def train_agent(seed: int, config: Dict[str, Any], return_dict: Dict[int, Any]) 
         return_dict (Dict[int, Any]): Shared dictionary to collect results across processes.
     """
     try:
-        agent_config: Dict[str, float] = config["agent"]
-        learning_rate = agent_config["learning_rate"]
-        discount = agent_config["discount"]
-        max_horizon = agent_config["max_horizon"]
-
-        training_loops = config["training"]["training_loops"]
-        n_steps = config["training"]["n_steps"]
-        verbose = config["verbose"]
-        env_id = config["environment_id"]
-        model_id = config["model_id"]
-        env_config = ENV_CONFIGURATION.get(env_id, {})
-
-        # Initialize Weights & Biases for logging
         wandb.init(
-            project=config["wandb"]["project"],
-            name=f"{config['wandb']['group_name']}_seed_{seed}",
+            project=project,
+            name=f"{group_name}_seed_{seed}",
             config={
                 "seed": seed,
-                **config["training"],
-                **config["agent"],
-                **env_config,
+                "training_loops": training_loops,
+                "n_steps": n_steps,
+                "step_size": step_size,
+                "initial_value": initial_value,
+                "discount": discount,
+                "max_horizon": max_horizon,
+                "tau": tau,
+                "environment_id": environment_id,
+                "obs_shape": obs_shape,
+                "model_type": model_type,
             },
             reinit=True,
-            notes=config["wandb"]["notes"],
-            group=config["wandb"]["group_name"],
-            dir=f"./wandb_{config['wandb']['group_name']}_seed_{seed}",
-            id=f"{config['wandb']['group_name']}_seed_{seed}_{wandb.util.generate_id()}",
+            notes=notes,
+            group=group_name,
+            dir=f"./wandb_{group_name}_seed_{seed}",
+            id=f"{group_name}_seed_{seed}_{wandb.util.generate_id()}",
         )
 
-        # Initialize the environment and agent
-        env = gym.make(id=env_id, disable_env_checker=True)
+        env = gym.make(id=environment_id)
 
-        agent, model = select_agent_and_model(
-            model_id=model_id,
-            discount=discount,
-            num_prize_indicators=env_config.get("num_prize_indicators", 2),
-            environment_length=env_config.get("env_length", 11),
-            number_intensities=len(env_config.get("status_intensities", [0, 5, 10])),
-            tau=agent_config.get("tau", None),
+        agent = BoundingBoxPlanningAgent(
+            state_shape=obs_shape,
+            num_actions=2,
+            step_size=step_size,
+            discount_rate=discount,
+            epsilon=1.0,
+            horizon=max_horizon,
+            initial_value=initial_value,
+            seed=seed,
+        )
+
+        model = ExpectationModel(
+            num_prize_indicators=len(obs_shape[2:]),
+            env_length=obs_shape[0],
+            status_intensities=status_intensities,
+            seed=int(seed),
         )
 
         if model:
@@ -81,35 +98,21 @@ def train_agent(seed: int, config: Dict[str, Any], return_dict: Dict[int, Any]) 
 
             # Training episode
             train_total_reward = 0.0
-            td_errors = []
-
+            agent.epsilon = 1.0
             for step in range(n_steps):
-                action = agent.get_action(obs, epsilon=1.0)
+                action = agent.act(obs)
                 next_obs, reward, terminated, truncated, info = env.step(action)
 
-                if model is not None:
-                    state: State = env.unwrapped.state
-                    model.state.set_state(
-                        position=state.position,
-                        current_status_indicator=state.current_status_indicator,
-                        previous_status_indicator=state.previous_status_indicator,
-                        prize_indicators=state.prize_indicators,
-                    )
-
-                td_error = agent.update_q_values(
+                agent.update(
                     obs=obs,
                     action=action,
-                    reward=reward,
                     next_obs=next_obs,
-                    alpha=learning_rate,
-                    max_horizon=max_horizon,
+                    reward=reward,
                     model=model,
-                    done=terminated or truncated,
                 )
 
                 obs = next_obs
                 train_total_reward += reward
-                td_errors.append(td_error)
 
                 if terminated or truncated:
                     break
@@ -118,9 +121,9 @@ def train_agent(seed: int, config: Dict[str, Any], return_dict: Dict[int, Any]) 
             obs, info = env.reset(seed=episode_seed + 1_000)
             discounted_return = 0.0
             eval_total_reward = 0.0
-
+            agent.epsilon = 0.0
             for step in range(n_steps):
-                action = agent.get_action(obs, epsilon=0.0)
+                action = agent.act(obs)
                 next_obs, reward, terminated, truncated, info = env.step(action)
                 obs = next_obs
                 discounted_return += discount**step * reward
@@ -140,11 +143,12 @@ def train_agent(seed: int, config: Dict[str, Any], return_dict: Dict[int, Any]) 
                 if terminated or truncated:
                     break
 
-            # Log training metrics
             wandb.log(
                 {
                     "train/total_train_reward": train_total_reward,
-                    "train/average_td_error": np.mean(td_errors) if td_errors else 0,
+                    "train/average_td_error": np.mean(agent.td_errors)
+                    if agent.td_errors
+                    else 0,
                     "train/total_evaluation_reward": eval_total_reward,
                     "train/total_evaluation_discounted_return": discounted_return,
                     "train_step": training_step,
@@ -153,14 +157,9 @@ def train_agent(seed: int, config: Dict[str, Any], return_dict: Dict[int, Any]) 
                 # commit = True
             )
 
-            if training_step % verbose == 0:
-                logger.info(
-                    f"Completed training step {training_step}/{training_loops}, seed {seed}"
-                )
-
         # Save Q-values
         q_values_filename = f"q_values_seed_{seed}.npz"
-        np.savez_compressed(q_values_filename, q_values=agent.q_values)
+        np.savez_compressed(q_values_filename, q_values=agent.Q)
         artifact = wandb.Artifact(f"q_values_seed_{seed}", type="model")
         artifact.add_file(q_values_filename)
         wandb.log_artifact(artifact)
@@ -169,61 +168,45 @@ def train_agent(seed: int, config: Dict[str, Any], return_dict: Dict[int, Any]) 
 
         logger.info(f"Training completed for seed {seed}")
 
-        # Store results
-        return_dict[seed] = {
-            "q_values": agent.q_values,
-        }
-
     except Exception as e:
-        # Handle exceptions
         error_message = (
             f"Exception in process with seed {seed}: {str(e)}\n{traceback.format_exc()}"
         )
-        return_dict[seed] = {
-            "error": error_message,
-        }
         logger.error(error_message)
 
 
-def main() -> None:
+@gin.configurable
+def run_seeds(n_seeds: int = 100, start_seed: int = 0) -> None:
     """Main function to initiate training across multiple seeds."""
-    args = parse_args()
-    config = load_config(args)
 
-    n_seeds = config["training"]["n_seeds"]
-    start_seed = config["training"]["start_seed"]
     seeds = np.arange(start_seed, start_seed + n_seeds)
+    # processes = []
 
-    manager = Manager()
-    return_dict = manager.dict()
-    processes = []
-
-    # Start processes for each seed
     for seed in seeds:
-        p = Process(
-            target=train_agent,
-            args=(
-                seed,
-                config,
-                return_dict,
-            ),
-        )
-        processes.append(p)
-        p.start()
+        train_agent(seed=seed)
+    #     p = Process(
+    #         target=train_agent,
+    #         args=(seed,),
+    #     )
+    #     processes.append(p)
+    #     p.start()
 
-    # Join processes
-    for p in processes:
-        p.join()
-
-    # Optionally, process the results in return_dict
-    for seed in seeds:
-        result = return_dict.get(seed)
-        if result is not None:
-            if "error" in result:
-                logger.error(f"Seed {seed} encountered an error: {result['error']}")
-            else:
-                logger.info(f"Seed {seed} completed successfully.")
+    # for p in processes:
+    #     p.join()
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser(
+        description="Train BBI agent with GoRight environment."
+    )
+    parser.add_argument(
+        "--config_file",
+        type=str,
+        default="goright_bbi",
+        help="Path to the config gin file",
+    )
+
+    args = parser.parse_args()
+
+    gin.parse_config_file(f"bbi/config/{args.config_file}.gin")
+    run_seeds()
