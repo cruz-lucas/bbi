@@ -1,96 +1,70 @@
-# exclude: "^(docs|.devcontainer|.venv|.vscode|templates|.*tests.*snapshots.*).*|.*[.]pyi"
-default_language_version:
-  ruby: 2.7.2
+# See https://pre-commit.com for more information
+# See https://pre-commit.com/hooks.html for more hooks
 repos:
-  - repo: meta
-    hooks:
-      - id: check-useless-excludes
-  - repo: https://github.com/alessandrojcm/commitlint-pre-commit-hook
-    rev: v9.19.0
-    hooks:
-      - id: commitlint
-        stages: [commit-msg]
-        additional_dependencies:
-          - "@commitlint/config-conventional"
-          - conventional-changelog-conventionalcommits
   - repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v4.4.0
+    rev: v5.0.0
     hooks:
+      - id: check-symlinks
+      - id: destroyed-symlinks
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-toml
       - id: check-ast
       - id: check-added-large-files
-      - id: check-builtin-literals
-      - id: check-case-conflict
-      - id: check-docstring-first
-      - id: check-executables-have-shebangs
-      - id: check-json
       - id: check-merge-conflict
-      - id: check-symlinks
-      - id: check-yaml
-        # exclude: ".*(helm|charts?).*templates.*.yaml"
-        args: ["--unsafe"]
+      - id: check-executables-have-shebangs
+      - id: check-shebang-scripts-are-executable
       - id: detect-private-key
-      - id: fix-byte-order-marker
-      - id: fix-encoding-pragma
-        args: ["--remove"]
-      # - id: no-commit-to-branch
-      #   args: [--branch, main]
-      - id: pretty-format-json
+      - id: debug-statements
+  - repo: https://github.com/codespell-project/codespell
+    rev: v2.3.0
+    hooks:
+      - id: codespell
         args:
-          - --autofix
-          - --no-sort-keys
-      - id: sort-simple-yaml
-      - id: trailing-whitespace
-      - id: check-added-large-files
-        args: ["--maxkb=50000"]
-  - repo: https://github.com/pycqa/isort
-    rev: 5.12.0
+          - --ignore-words-list=reacher,ure,referenc,wile,ontact,manuel
+  - repo: https://github.com/PyCQA/flake8
+    rev: 7.1.1
+    hooks:
+      - id: flake8
+        args:
+          - '--per-file-ignores=*/__init__.py:F401 gymnasium/envs/registration.py:E704 docs/tutorials/*.py:E402 gymnasium/experimental/wrappers/__init__.py:E402'
+          - --ignore=E203,W503,E741
+          - --max-complexity=30
+          - --max-line-length=456
+          - --show-source
+          - --statistics
+  - repo: https://github.com/asottile/pyupgrade
+    rev: v3.19.1
+    hooks:
+      - id: pyupgrade
+        args: ["--py38-plus"]
+  - repo: https://github.com/PyCQA/isort
+    rev: 5.13.2
     hooks:
       - id: isort
-        name: isort
-        args: [--atomic, --profile=black, --multi-line=3, --filter-files]
-  # - repo: https://github.com/psf/black
-  #   rev: 23.1.0
+  # - repo: https://github.com/python/black
+  #   rev: 24.10.0
   #   hooks:
   #     - id: black
-  #       args: [--line-length=120]
-  # - repo: https://github.com/nbQA-dev/nbQA
-  #   rev: 1.9.1
-  #   hooks:
-  #   - id: nbqa-black
-  #     additional_dependencies: [black==22.3.0]
-  #   - id: nbqa-pyupgrade
-  #     additional_dependencies: [pyupgrade==2.7.3]
-  #   - id: nbqa-isort
-  #     additional_dependencies: [isort==5.6.4]
-  - repo: https://github.com/astral-sh/ruff-pre-commit
-    rev: v0.8.2
+  - repo: https://github.com/pycqa/pydocstyle
+    rev: 6.3.0
     hooks:
-      - id: ruff
-        args: [ --fix ]
-      - id: ruff-format
-  # - repo: https://github.com/pre-commit/mirrors-mypy
-  #   rev: "v1.8.0"
-  #   hooks:
-  #     - id: mypy
-  #       args:
-  #         - --ignore-missing-imports
-  #         - --explicit-package-bases
-  #       additional_dependencies:
-  #         - types-requests
-  #         - types-python-dateutil
-  #         - types-python-slugify
-  #         - types-PyYAML
-  #         - types-cachetools
-  #         - attrs==23.1.0
-  #         - pydantic==2.5.3
-  #         - pydantic-settings==2.1.0
-  #         - types-toml
-  - repo: https://github.com/pycqa/pylint
-    rev: v3.3.1
-    hooks:
-      - id: pylint
-        files: "^.*libs/.*"
+      - id: pydocstyle
+        exclude: ^(gymnasium/envs/box2d)|(gymnasium/envs/classic_control)|(gymnasium/envs/mujoco)|(gymnasium/envs/toy_text)|(tests/envs)|(tests/spaces)|(tests/utils)|(tests/vector)|(docs/)
         args:
-          - --max-line-length=120
-          - --ignore-imports=yes
-          - -d duplicate-code
+          - --source
+          - --explain
+          - --convention=google
+        additional_dependencies: ["tomli"]
+  - repo: local
+    hooks:
+      - id: pyright
+        name: pyright
+        entry: pyright
+        language: node
+        pass_filenames: false
+        types: [python]
+        additional_dependencies: ["pyright@1.1.383"]
+        args:
+          - --project=pyproject.toml

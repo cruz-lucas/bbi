@@ -4,10 +4,16 @@ from typing import List, Optional, Tuple
 
 import numpy as np
 
-from bbi.models.model_base import ModelBase, ObsType
+from bbi.models.model_base import ModelBase
 
 
 class PerfectModel(ModelBase):
+    """Perfect model class.
+
+    Args:
+        ModelBase (_type_): _description_
+    """
+
     def __init__(
         self,
         num_prize_indicators: int = 2,
@@ -24,6 +30,7 @@ class PerfectModel(ModelBase):
             status_intensities (List[int]): Possible status intensities.
             has_state_offset (bool): Whether to add noise to observations.
             seed (Optional[int]): Seed for reproducibility.
+            render_mode (Optional[int]): Render mode.
         """
         super().__init__(
             num_prize_indicators=num_prize_indicators,
@@ -35,8 +42,15 @@ class PerfectModel(ModelBase):
         )
 
     def predict(
-        self, obs: Tuple[int, ...], action: int, **kwargs
-    ) -> Tuple[ObsType, np.float32, ObsType, np.float32, ObsType, np.float32]:
+        self,
+        obs: Tuple[int, ...],
+        action: int,
+        prev_status: int | None = None,
+        **kwargs,
+    ) -> (
+        Tuple[Tuple[int, ...], float]
+        | Tuple[Tuple[int, ...], float, Tuple[int, ...], float, Tuple[int, ...], float]
+    ):
         """Predict the next state and reward given an observation and action, and also compute lower and upper bounds by using the minimum and maximum status intensities, respectively.
 
         This method sets the environment’s state based on the observation,
@@ -67,8 +81,14 @@ class PerfectModel(ModelBase):
         elif status == 2:
             status = 10
 
+        if not isinstance(prev_status, int):
+            raise ValueError(
+                f"Previous status must be int for the Perfect model prediction. Got: {prev_status}"
+            )
+
         self.state.set_state(
             position=pos,
+            previous_status_indicator=prev_status,
             current_status_indicator=status,
             prize_indicators=np.array(prize),
         )
@@ -76,7 +96,20 @@ class PerfectModel(ModelBase):
         _, exp_reward, _, _, _ = self.step(action)
         exp_obs = self.state.get_state()[self.state.mask]
 
-        return (exp_obs, exp_reward)
+        exp_obs[1] = np.argwhere(self.status_intensities == exp_obs[1])
+        exp_obs = [int(i) for i in exp_obs]
+        return (tuple(exp_obs), exp_reward)
 
-    def update(self, **kwargs) -> None:
+    def update(
+        self,
+        obs: Tuple[int, ...],
+        action: int,
+        next_obs: Tuple[int, ...],
+        reward: np.float32,
+    ) -> None:
+        """_summary_.
+
+        Returns:
+            _type_: _description_
+        """
         return None

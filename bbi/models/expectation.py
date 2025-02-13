@@ -9,6 +9,8 @@ from bbi.models.model_base import ModelBase, ObsType
 
 
 class ExpectationModel(ModelBase):
+    """Expectation model class."""
+
     def __init__(
         self,
         num_prize_indicators: int = 2,
@@ -25,6 +27,7 @@ class ExpectationModel(ModelBase):
             status_intensities (List[int]): Possible status intensities.
             has_state_offset (bool): Whether to add noise to observations.
             seed (Optional[int]): Seed for reproducibility.
+            render_mode (Optional[int]): Render mode.
         """
         super().__init__(
             num_prize_indicators=num_prize_indicators,
@@ -39,7 +42,7 @@ class ExpectationModel(ModelBase):
         self,
         seed: Optional[int] = None,
         options: Optional[Dict[str, Any]] = None,
-    ) -> Tuple[np.ndarray, Dict[str, Any]]:
+    ) -> Tuple[ObsType, Dict[str, Any]]:
         """Resets the environment to its initial state.
 
         Args:
@@ -55,11 +58,13 @@ class ExpectationModel(ModelBase):
 
         return obs, info
 
-    def _compute_next_status(self, **kwargs) -> int:
+    def _compute_next_status(
+        self, previous_status: int = 0, current_status: int = 0
+    ) -> int:
         """Returns the expected next status, i.e., 5.
 
         Returns:
-            int: Expected ned status.
+            int: Expected next status.
         """
         return 5
 
@@ -94,7 +99,11 @@ class ExpectationModel(ModelBase):
         action: int,
         state_bb: Tuple[Tuple[int, ...], Tuple[int, ...]] | None = None,
         action_bb: Tuple[int, int] | None = None,
-    ) -> Tuple[ObsType, np.float32, ObsType, np.float32, ObsType, np.float32]:
+        **kwargs,
+    ) -> (
+        Tuple[Tuple[int, ...], float]
+        | Tuple[Tuple[int, ...], float, Tuple[int, ...], float, Tuple[int, ...], float]
+    ):
         """Predict the next state and reward given an observation and action, and also compute lower and upper bounds by using the minimum and maximum status intensities, respectively.
 
         This method sets the environment’s state based on the observation,
@@ -135,36 +144,38 @@ class ExpectationModel(ModelBase):
         _, exp_reward, _, _, _ = self.step(action)
         exp_obs = self.state.get_state()[self.state.mask]
 
-        if state_bb is not None:
+        if (state_bb is not None) and (action_bb is not None):
             state_ranges = [
                 range(state_bb[0][i], state_bb[1][i] + 1)
                 for i in range(len(state_bb[0]))
             ]
-            action_range = range(action_bb[0], action_bb[1] + 1)
 
             state_candidates = []
             reward_candidates = []
             for s in product(*state_ranges):
-                for a in action_range:
+                for a in action_bb:
+                    pos = s[0]
+                    status = s[1]
+                    prize = np.array(s[2:])
                     self.state.set_state(
                         position=pos,
                         current_status_indicator=status,
-                        prize_indicators=np.array(prize),
+                        prize_indicators=prize,
                     )
 
                     self._compute_next_status = lambda *args, **kwargs: 0
-                    _, lower_reward, _, _, _ = self.step(action)
+                    _, lower_reward, _, _, _ = self.step(a)
                     state_candidates.append(self.state.get_state()[self.state.mask])
                     reward_candidates.append(lower_reward)
 
                     self.state.set_state(
                         position=pos,
                         current_status_indicator=status,
-                        prize_indicators=np.array(prize),
+                        prize_indicators=prize,
                     )
 
                     self._compute_next_status = lambda *args, **kwargs: 10
-                    _, upper_reward, _, _, _ = self.step(action)
+                    _, upper_reward, _, _, _ = self.step(a)
                     state_candidates.append(self.state.get_state()[self.state.mask])
                     reward_candidates.append(upper_reward)
 
@@ -188,7 +199,16 @@ class ExpectationModel(ModelBase):
                 upper_reward,
             )
 
-        return (exp_obs, exp_reward)
+        exp_obs[1] = np.argwhere(self.status_intensities == exp_obs[1])
+        exp_obs = [int(i) for i in exp_obs]
+        return (tuple(exp_obs), exp_reward)
 
-    def update(self, **kwargs) -> None:
+    def update(
+        self,
+        obs: Tuple[int, ...],
+        action: int,
+        next_obs: Tuple[int, ...],
+        reward: np.float32,
+    ) -> None:
+        """Dummy method to comply with the API."""
         return None

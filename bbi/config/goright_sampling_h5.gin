@@ -1,20 +1,20 @@
-run_seeds.n_seeds               = 10
-run_seeds.start_seed            = 0
+run_seeds.n_seeds               = 2
+run_seeds.start_seed            = 1
 
 train_agent.training_loops      = 600
 train_agent.n_steps             = 500
-train_agent.step_size           = 0.05
+train_agent.step_size           = 0.2
 train_agent.initial_value       = 0.0
 train_agent.discount            = 0.9
-train_agent.max_horizon         = 1
+train_agent.max_horizon         = 5
 train_agent.tau                 = 1.0
 
 train_agent.environment_id      = "GoRight-v0"
-train_agent.model_type          = "none"
+train_agent.model_type          = "sampling"
 train_agent.uncertainty_type    = "unselective"
 train_agent.obs_shape           = (11,3,2,2)
 train_agent.status_intensities  = [0,5,10]
 
 train_agent.project             = "BBI"
-train_agent.notes               = "GoRight environment with Q-learning"
-train_agent.group_name          = "goright_qlearning_2"
+train_agent.notes               = "GoRight environment with unselective planning using sampling model with h=5"
+train_agent.group_name          = "goright_sampling_h5"
