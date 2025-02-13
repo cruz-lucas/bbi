@@ -204,12 +204,6 @@ class BoundingBoxPlanningAgent:
                     f"target_up={target_up}, uncertainty={uncertainty}"
                 )
 
-                targets.append(target_pred)
-                uncertainties.append(uncertainty)
-
-                planning_state = pred_state
-                planning_action = self.act(s_prime, eps=0.0)
-
             elif self.uncertainty_type == "unselective":
                 if isinstance(model, PerfectModel):
                     env_state = model.state.get_state()
@@ -244,7 +238,7 @@ class BoundingBoxPlanningAgent:
                 )
 
             targets.append(target_pred)
-            uncertainties.append(0)
+            uncertainties.append(uncertainty)
 
             planning_state = pred_state
             planning_action = self.act(s_prime, eps=0.0)
@@ -290,15 +284,14 @@ class BoundingBoxPlanningAgent:
             q_vals = self.Q[s]
             max_q = np.max(q_vals)
             best_actions = np.flatnonzero(q_vals == max_q)
-            chosen_action = int(self.rng.choice(best_actions))
-            low_candidates.append((max_q, chosen_action))
-            up_candidates.append((max_q, chosen_action))
+            low_candidates.append((max_q, best_actions))
+            up_candidates.append((max_q, best_actions))
 
         q_low: float = min(low_candidates, key=lambda x: x[0])[0]
-        low_actions = [a for (q, a) in low_candidates if q == q_low]
+        low_actions = [i for (q, a) in low_candidates if q == q_low for i in a]
 
         q_up: float = max(up_candidates, key=lambda x: x[0])[0]
-        up_actions = [a for (q, a) in up_candidates if q == q_up]
+        up_actions = [i for (q, a) in up_candidates if q == q_up for i in a]
 
         action_bb = list(set(low_actions + up_actions))
         return (q_low, q_up, action_bb)

@@ -1,5 +1,5 @@
-run_seeds.n_seeds               = 17
-run_seeds.start_seed            = 13
+run_seeds.n_seeds               = 1
+run_seeds.start_seed            = 99
 
 train_agent.training_loops      = 600
 train_agent.n_steps             = 500
@@ -17,4 +17,4 @@ train_agent.status_intensities  = [0,5,10]
 
 train_agent.project             = "BBI"
 train_agent.notes               = "BBI with GoRight environment"
-train_agent.group_name          = "goright_bbi"
+train_agent.group_name          = "goright_bbi_debug"
