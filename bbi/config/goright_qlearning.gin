@@ -14,4 +14,4 @@ train_agent.status_intensities  = [0,5,10]
 
 train_agent.project             = "BBI"
 train_agent.notes               = "GoRight environment with Q-learning"
-train_agent.group_name          = "goright_qlearning_paralell"
+train_agent.group_name          = "goright_qlearning"

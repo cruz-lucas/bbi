@@ -1,209 +1,117 @@
+Below is an example README for your repository:
+
 
 
 # Bounding-Box Inference for Error-Aware Model-Based Reinforcement Learning
 
-This repository provides an **unofficial** Python implementation for the paper:
+This repository contains the implementation and replication code for the paper:
 
-> **Talvitie, Erin J., et al.** “Bounding-Box Inference for Error-Aware Model-Based Reinforcement Learning.” Reinforcement Learning Conference, 2024. [\[Paper Link\]](https://openreview.net/forum?id=dPP1KqRb7l)
+> **Talvitie et al. (2024). Bounding-Box Inference for Error-Aware Model-Based Reinforcement Learning.**
+> *Reinforcement Learning Journal, vol. 5, 2024, pp. 2440–2460.*
 
-Here, we demonstrate how to implement bounding-box inference in model-based RL, using a variety of agents and environment configurations for the "GoRight" task, among others.
+The code implements a selective planning method that uses bounding‐box inference to mitigate model errors in model‐based reinforcement learning (MBRL). In our experiments, we evaluate our approach on the [GoRight environment](https://github.com/cruz-lucas/goright) (see below), comparing variants such as Q-learning, Perfect, Expectation, Sampling, and different bounding-box inference (BBI) configurations (linear, tree, and neural).
 
----
 
-## Table of Contents
-1. [Repository Structure](#repository-structure)
-2. [Installation](#installation)
-3. [Usage](#usage)
-   1. [Running the Simulator (Rendering)](#running-the-simulator-rendering)
-   2. [Training Agents](#training-agents)
-4. [Configuration Files](#configuration-files)
-5. [Agents and Models](#agents-and-models)
-6. [References](#references)
-7. [License](#license)
 
----
+## Overview
 
-## Repository Structure
+This repository replicates the experimental results from the paper by integrating a bounding-box inference procedure into a tabular Q-learning framework. In each training episode, the agent:
+- Collects a real transition from the GoRight environment.
+- Uses a predictive model to simulate additional rollout steps up to a specified horizon.
+- Combines the multiple (real and simulated) TD targets via a softmin weighting over their uncertainties (computed via bounding-box inference) to update the Q–values.
 
-```bash
-bbi/
-├── agents/
-│   ├── base_agent.py
-│   ├── planning_agent_base.py
-│   ├── qlearning.py
-│   ├── selective_planning_agent.py
-│   └── unselective_planning_agent.py
-├── config/
-│   └── ... (config files)
-├── environments/
-│   ├── resources/
-│   │   └── ... (images and other assets)
-│   ├── base_env.py
-│   └── goright.py
-├── models/
-│   ├── bbi.py
-│   ├── expectation.py
-│   ├── linear_bbi.py
-│   ├── neural_bbi.py
-│   ├── regression_tree_bbi.py
-│   └── sampling.py
-├── utils.py
-├── .gitignore
-├── .pre-commit-config.yaml
-├── Makefile
-├── pyproject.toml
-├── README.md
-├── train.py
-└── uv.lock
-```
+The repository includes:
+- **`train.py`** – The main training script, configurable via [gin-config](https://github.com/google/gin-config).
+- **`Makefile`** – A set of commands for running various experiments (e.g., Q-learning, perfect model, expectation model with different horizons, sampling, and various BBI configurations).
+- **`bbi/agent.py`** – The implementation of the learning agent with bounding-box inference.
+- **`bbi/models/`** – Different model implementations (Expectation, Sampling, Perfect, and a base Model).
 
-- **agents/**: Contains various agent implementations (Q-Learning, Q-learning with planning, selective/unselective).
-- **config/**: YAML files specifying hyperparameters and environment configurations for different experiments.
-- **environments/**:
-  - **resources/**: Images and other assets (e.g. sprites for rendering).
-  - **base_env.py** and **goright.py**: Environment definitions.
-- **models/**: Different approaches (hand-coded bounding-box inference, sampling, neural, linear, regression tree, etc.).
-- **utils.py**: Utility functions (such as rendering the simulator, loading configs, etc.).
-- **train.py**: Main script for training agents with various configurations.
-- **pyproject.toml**, **Makefile**, **uv.lock**: Project metadata, optional build instructions, and lock files.
-- **.pre-commit-config.yaml**: Optional git hooks and formatting/linting rules.
 
----
 
 ## Installation
 
-### Using [uv](https://github.com/previm/uv)
+### Prerequisites
 
-If you use [uv](https://github.com/previm/uv) to manage ephemeral virtual environments, you can simply:
+- **Python 3.10+**
+- **Docker** (optional, for containerized execution)
 
-1. **Clone** this repository:
-   ```bash
-   git clone https://github.com/yourusername/bbi.git
-   cd bbi
-   ```
-2. **Run** with `uv`:
-   ```bash
-   # For example, to run the training script:
-   uv run python train.py
-   ```
-   This automatically creates a temporary environment, installs dependencies (from `pyproject.toml` and `uv.lock`), and executes `train.py`.
+### 1. Clone the Repository
 
-### Virtual Environment with UV
-
-If you prefer using **uv** to create a standard virtual environment (rather than running scripts directly via `uv run`), you can set up a persistent environment as follows:
-
-1. **Initialize** a named environment:
-   ```bash
-   uv init .venv
-   ```
-   This creates a directory that holds the virtual environment.
-
-2. **Install** dependencies into `.venv`:
-   ```bash
-   source .venv/bin/activate
-   uv sync
-   ```
-   By default, `uv sync` will look at your `pyproject.toml` (and optionally `uv.lock` if present) to install dependencies.
-
-3. **Run** scripts or Python commands:
-   ```bash
-   python train.py --config config/goright_q_learning.yaml
-   ```
-
-When finished, simply deactivate by closing your shell or using:
 ```bash
-deactivate
+git clone https://github.com/cruz-lucas/bbi.git
+cd bbi
 ```
-(to stop using that environment).
 
-### Traditional Virtual Environment
+### 2. Create a Virtual Environment & Install Dependencies
 
-Alternatively, if you prefer a standard Python virtual environment:
+#### 1. Using **pip**:
 
-1. **Create** and activate:
-   ```bash
-   python -m venv .venv
-   source venv/bin/activate
-   ```
-2. **Install**:
-   ```bash
-   pip install -U pip
-   pip install .
-   ```
-   or install dependencies as needed (from a `requirements.txt` if provided).
+```bash
+python -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+```
 
----
+#### 2. Or using **uv**:
+
+```bash
+uv venv
+source venv/bin/activate  # On Windows use: venv\Scripts\activate
+uv pip install .
+```
 
 ## Usage
 
-### 1. Running the Simulator (Rendering)
+### Running Training Experiments
 
-For interactive simulation, use the utility functions in `utils.py` (e.g., `render_simulator`, `render_env`). For example:
+The primary training script is `train.py`. You can run it directly via:
+
 ```bash
-uv run python -m bbi.utils
+python train.py --config_file="bbi/config/goright_bbi.gin" --n_seeds=100 --start_seed=0
 ```
-In this interactive window:
-- **Left / Right arrows** step through the environment.
-- **m** switches between environment models (e.g., `GoRight`, `SamplingModel`, etc.).
-- **r** resets the current environment.
-- **ESC** quits.
 
-### 2. Training Agents
+The following command-line arguments are available:
+- `--config_file`: Path (without extension) to the gin configuration file (located in `bbi/config/`).
+- `--n_seeds`: Number of independent training seeds to run.
+- `--start_seed`: Initial seed value.
 
-Use `train.py` to train an agent:
-```bash
-uv run python train.py --config config/goright_q_learning.yaml
+### Using the Makefile
+
+A sample Makefile is provided to run various experimental setups. For example:
+
+- **Q-Learning Baseline:**
+
+  ```bash
+  make q-learning
+  ```
+
+## The GoRight Environment
+
+The experiments in this repository use the GoRight environment – a simple RL environment that poses a challenging exploration problem. The environment (implemented separately) is available at:
+[https://github.com/cruz-lucas/goright](https://github.com/cruz-lucas/goright)
+
+For full details on the GoRight environment, please refer to its repository.
+
+## Citation
+
+If you use this implementation in your research, please cite the original paper:
+
+```bibtex
+@article{talvitie2024bounding,
+    title={Bounding-Box Inference for Error-Aware Model-Based Reinforcement Learning},
+    author={Talvitie, Erin J and Shao, Zilei and Li, Huiying and Hu, Jinghan and Boerma, Jacob and Zhao, Rory and Wang, Xintong},
+    journal={Reinforcement Learning Journal},
+    volume={5},
+    pages={2440--2460},
+    year={2024}
+}
 ```
-- Loads the specified config YAML (e.g. `goright_q_learning.yaml`).
-- Spawns multiple processes (one per seed).
-- Trains the specified agent (Q-Learning, bounding-box inference, sampling, etc.).
-- Optionally logs metrics to [Weights & Biases](https://wandb.ai/) if configured in the config file.
 
-**Key parameters** (e.g., number of steps, environment ID, learning rate) come from the YAML file.
 
----
+## Contributing
 
-## Configuration Files
+Contributions, improvements, and suggestions are welcome! Feel free to open an issue or submit a pull request.
 
-The `config/` folder contains multiple `.yaml` files specifying hyperparameters and environment details. For example:
-- **goright_bbi.yaml**: BBI model with the GoRight environment.
-- **goright_q_learning.yaml**: Q-Learning approach.
-- **goright_sampling_h5.yaml**: Sampling-based with horizon=5.
-
-A config might look like:
-```yaml
-environment_id: "bbi/goRight-v0"
-model_id: "bbi"
-agent:
-  learning_rate: 0.1
-  gamma: 0.99
-  ...
-training:
-  n_seeds: 4
-  start_seed: 42
-  n_steps: 100
-  ...
-```
-Adjust parameters to suit your experiments.
-
----
-
-## Agents and Models
-
-- **agents/**:
-  - **qlearning.py**: Basic Q-Learning agent.
-  - **selective_planning_agent.py** / **unselective_planning_agent.py**: BBI-based or sampling-based planning approaches.
-- **models/**:
-  - **bbi.py**, **linear_bbi.py**, **neural_bbi.py**, **regression_tree_bbi.py**: Variations of bounding-box inference models (hand-coded, linear, neural, tree).
-  - **expectation.py**, **sampling.py**: Expected-outcome or sampling-based approaches for environment model predictions.
-
----
-
-## References
-
-- **Paper**: Talvitie, Erin J., et al. “Bounding-Box Inference for Error-Aware Model-Based Reinforcement Learning.” *Reinforcement Learning Conference, 2024.* [OpenReview Link](https://openreview.net/forum?id=dPP1KqRb7l)
-
----
 
 ## License
 
