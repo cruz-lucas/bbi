@@ -1,6 +1,3 @@
-run_seeds.n_seeds               = 10
-run_seeds.start_seed            = 0
-
 train_agent.training_loops      = 600
 train_agent.n_steps             = 500
 train_agent.step_size           = 0.05
@@ -17,4 +14,4 @@ train_agent.status_intensities  = [0,5,10]
 
 train_agent.project             = "BBI"
 train_agent.notes               = "GoRight environment with Q-learning"
-train_agent.group_name          = "goright_qlearning_2"
+train_agent.group_name          = "goright_qlearning_paralell"

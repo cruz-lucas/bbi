@@ -4,7 +4,7 @@ import argparse
 import logging
 import os
 import traceback
-# from multiprocessing import Process
+from multiprocessing import Process
 from typing import List, Tuple
 
 import gin
@@ -36,7 +36,7 @@ def train_agent(
     uncertainty_type: str = "unselective",
     project: str = "BBI",
     notes: str = "",
-    group_name: str = "",
+    group_name: str = "default",
 ) -> None:
     """Trains a Q-Learning agent using the provided seed and configuration.
 
@@ -232,39 +232,61 @@ def train_agent(
         logger.error(error_message)
 
 
-@gin.configurable
-def run_seeds(n_seeds: int = 100, start_seed: int = 0) -> None:
+def train_agent_wrapper(seed: int, config_file: str):
+    """_summary_.
+
+    Args:
+        seed (int): _description_
+        config_file (str): _description_
+    """
+    gin.parse_config_file(config_file)
+    train_agent(seed)
+
+
+def run_seeds(n_seeds: int = 100, start_seed: int = 0, config_file: str = "bbi/config/goright_bbi.gin") -> None:
     """Main function to initiate training across multiple seeds.
 
     Args:
         n_seeds (int, optional): _description_. Defaults to 100.
         start_seed (int, optional): _description_. Defaults to 0.
+        config_file (str, optional): _description_. Defaults to "bbi/config/goright_bbi.gin".
     """
     seeds = np.arange(start_seed, start_seed + n_seeds)
-    # processes = []
+    processes = []
 
     for seed in seeds:
-        train_agent(seed=int(seed))
-    #     p = Process(
-    #         target=train_agent,
-    #         args=(seed,),
-    #     )
-    #     processes.append(p)
-    #     p.start()
+        p = Process(
+            target=train_agent_wrapper,
+            args=(seed, config_file),
+        )
+        processes.append(p)
+        p.start()
 
-    # for p in processes:
-    #     p.join()
+    for p in processes:
+        p.join()
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
-        description="Train BBI agent with GoRight environment."
+        description="Train learning agent with GoRight environment."
     )
     parser.add_argument(
         "--config_file",
         type=str,
         default="goright_bbi",
         help="Path to the config gin file",
+    )
+    parser.add_argument(
+        "--n_seeds",
+        type=int,
+        default=100,
+        help="Number of seeds to run",
+    )
+    parser.add_argument(
+        "--start_seed",
+        type=int,
+        default=0,
+        help="Initial seed",
     )
 
     args = parser.parse_args()
@@ -278,5 +300,4 @@ if __name__ == "__main__":
         ]
     )
 
-    gin.parse_config_file(f"bbi/config/{args.config_file}.gin")
-    run_seeds()
+    run_seeds(n_seeds=args.n_seeds, start_seed=args.start_seed, config_file=f"bbi/config/{args.config_file}.gin")
