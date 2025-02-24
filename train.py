@@ -8,11 +8,13 @@ from multiprocessing import Process
 from typing import List, Tuple
 
 import gin
+import goright.env
 import gymnasium as gym
 import numpy as np
 import wandb
 from wandb.util import generate_id
 
+import goright
 from bbi.agent import BoundingBoxPlanningAgent
 from bbi.models import ExpectationModel, ModelBase, PerfectModel, SamplingModel
 
@@ -146,7 +148,7 @@ def train_agent(
 
                 if model_type == "perfect":
                     env_unwrapped = env.unwrapped
-                    if not isinstance(env_unwrapped, ModelBase):
+                    if not (isinstance(env_unwrapped, ModelBase) or isinstance(env_unwrapped, goright.env.GoRight)):
                         raise ValueError(
                             f"Environment must inherit ModelBase. Got: {type(env_unwrapped)}"
                         )
@@ -255,6 +257,7 @@ def run_seeds(n_seeds: int = 100, start_seed: int = 0, config_file: str = "bbi/c
     processes = []
 
     for seed in seeds:
+        # train_agent_wrapper(seed=int(seed), config_file=config_file)
         p = Process(
             target=train_agent_wrapper,
             args=(seed, config_file),
@@ -279,20 +282,27 @@ if __name__ == "__main__":
     parser.add_argument(
         "--n_seeds",
         type=int,
-        default=100,
+        default=1,
         help="Number of seeds to run",
     )
     parser.add_argument(
         "--start_seed",
         type=int,
-        default=0,
+        default=99,
         help="Initial seed",
+    )
+
+    parser.add_argument(
+        "--debug",
+        type=bool,
+        default=False,
+        help="Flag to log updates",
     )
 
     args = parser.parse_args()
 
     logging.basicConfig(
-        level=logging.INFO,
+        level=logging.DEBUG,# if args.debug else logging.INFO,
         format="%(asctime)s %(levelname)s [%(name)s] %(message)s",
         handlers=[
             # logging.StreamHandler(),

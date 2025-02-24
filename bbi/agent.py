@@ -207,7 +207,7 @@ class BoundingBoxPlanningAgent:
             elif self.uncertainty_type == "unselective":
                 if isinstance(model, PerfectModel):
                     env_state = model.state.get_state()
-                    prev_status = env_state[1]
+                    prev_status = int(env_state[1])
 
                 prediction = model.predict(
                     obs=planning_state,

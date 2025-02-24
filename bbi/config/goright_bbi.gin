@@ -14,4 +14,4 @@ train_agent.status_intensities  = [0,5,10]
 
 train_agent.project             = "BBI"
 train_agent.notes               = "BBI with GoRight environment"
-train_agent.group_name          = "goright_bbi"
+train_agent.group_name          = "goright_bbi_debug"

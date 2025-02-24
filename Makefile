@@ -23,10 +23,10 @@ run:
 		$(IMAGE_NAME)
 
 q-learning:
-	python train.py --config_file="goright_qlearning" --n_seeds=20 --start_seed=30
+	python train.py --config_file="goright_qlearning" --n_seeds=50 --start_seed=00
 
 perfect:
-	python train.py --config_file="goright_perfect" --n_seeds=50 --start_seed=0
+	python train.py --config_file="goright_perfect" --n_seeds=1 --start_seed=11 --debug=True
 
 expect-2:
 	python train.py --config_file="goright_expected_h2" --n_seeds=50 --start_seed=0
@@ -35,13 +35,13 @@ expect-5:
 	python train.py --config_file="goright_expected_h5" --n_seeds=50 --start_seed=0
 
 sampling-2:
-	python train.py --config_file="goright_sampling_h2" --n_seeds=50 --start_seed=0
+	python train.py --config_file="goright_sampling_h2" --n_seeds=40 --start_seed=10
 
 sampling-5:
 	python train.py --config_file="goright_sampling_h5" --n_seeds=50 --start_seed=0
 
 bounding-box:
-	python train.py --config_file="goright_bbi" --n_seeds=10 --start_seed=10
+	python train.py --config_file="goright_bbi" --n_seeds=50 --start_seed=0
 
 linear-bbi:
 	python train.py --config_file="goright_bbi_linear" --n_seeds=50 --start_seed=0
